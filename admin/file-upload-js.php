@@ -68,8 +68,7 @@ $(document).ready(function() {
     }).data('url');
 
     const btn = $('.upload-file');
-    const fileInput = $('<input type="file" name="file" multiple />').hide().insertAfter(btn);
-    let completeFile = false;
+    const fileInput = $('<input type="file" name="file" />').hide().insertAfter(btn);
 
     btn.click(function () {
         fileInput.click();
@@ -80,10 +79,8 @@ $(document).ready(function() {
         if (this.files.length === 0) {
             return;
         }
-        for (let i = 0; i < this.files.length; i ++) {
-            Typecho.uploadFile(this.files[i]);
-        }
-        completeFile = false;
+
+        Typecho.uploadFile(this.files[0]);
     });
 
     function fileUploadStart (file) {
@@ -139,76 +136,113 @@ $(document).ready(function() {
         attachDeleteEvent(li);
         updateAttachmentNumber();
 
-        if (!completeFile) {
-            Typecho.uploadComplete(attachment);
-            completeFile = true;
-        }
+        Typecho.uploadComplete(attachment);
     }
 
-    Typecho.uploadFile = (function () {
-        const types = '<?php echo json_encode($options->allowedAttachmentTypes); ?>';
-        const maxSize = <?php echo $phpMaxFilesize ?>;
-        const queue = [];
-        let index = 0;
+Typecho.uploadFile = (function () {
+    const types = '<?php echo json_encode($options->allowedAttachmentTypes); ?>';
+    const maxSize = <?php echo $phpMaxFilesize ?>;
+    const queue = [];
+    let isUploading = false;
+    let index = 0;
 
-        const getUrl = function () {
-            const url = new URL(uploadUrl);
-            const cid = $('input[name=cid]').val();
+    const getUrl = function () {
+        const url = new URL(uploadUrl);
+        const cid = $('input[name=cid]').val();
 
-            url.searchParams.append('cid', cid);
-            return url.toString();
-        };
+        url.searchParams.append('cid', cid);
+        return url.toString();
+    };
 
-        const upload = function () {
-            const file = queue.shift();
+    const processNext = function () {
+        if (queue.length === 0 || isUploading) {
+            return;
+        }
 
-            if (!file) {
-                return;
+        isUploading = true;
+        const item = queue.shift();
+        
+        const data = new FormData();
+        data.append('file', item.file);
+
+        fetch(getUrl(), {
+            method: 'POST',
+            body: data
+        }).then(function (response) {
+            if (response.ok) {
+                return response.json();
+            } else {
+                throw new Error(response.statusText);
             }
-
-            const data = new FormData();
-            data.append('file', file);
-
-            fetch(getUrl(), {
-                method: 'POST',
-                body: data
-            }).then(function (response) {
-                if (response.ok) {
-                    return response.json();
-                } else {
-                    throw new Error(response.statusText);
-                }
-            }).then(function (data) {
-                if (data) {
-                    const [_, attachment] = data;
-                    fileUploadComplete(file, attachment);
-                    upload();
-                } else {
-                    throw new Error('no data');
-                }
-            }).catch(function (error) {
-                fileUploadError('network', file);
-                upload();
+        }).then(function (data) {
+            if (data) {
+                const [_, attachment] = data;
+                fileUploadComplete(item.file, attachment);
+                item.resolve({
+                    success: true,
+                    file: item.file,
+                    attachment: attachment,
+                    message: '上传成功'
+                });
+            } else {
+                throw new Error('no data');
+            }
+        }).catch(function (error) {
+            fileUploadError('network', item.file);
+            item.reject({
+                success: false,
+                file: item.file,
+                error: error,
+                message: '上传失败: ' + error.message
             });
-        };
+        }).finally(function () {
+            isUploading = false;
+            processNext();
+        });
+    };
 
-        return function (file) {
+    return function (file) {
+        return new Promise(function (resolve, reject) {
             file.id = 'upload-' + (index++);
 
             if (file.size > maxSize) {
-                return fileUploadError('size', file);
+                const error = {
+                    success: false,
+                    file: file,
+                    error: 'size',
+                    message: '文件大小超出限制'
+                };
+                fileUploadError('size', file);
+                reject(error);
+                return;
             }
 
             const match = file.name.match(/\.([a-z0-9]+)$/i);
             if (!match || types.indexOf(match[1].toLowerCase()) < 0) {
-                return fileUploadError('type', file);
+                const error = {
+                    success: false,
+                    file: file,
+                    error: 'type',
+                    message: '文件类型不支持'
+                };
+                fileUploadError('type', file);
+                reject(error);
+                return;
             }
 
-            queue.push(file);
+            // 将上传任务加入队列
+            queue.push({
+                file: file,
+                resolve: resolve,
+                reject: reject
+            });
+
             fileUploadStart(file);
-            upload();
-        };
-    })();
+            processNext();
+        });
+    };
+})();
+
 
     function attachInsertEvent (el) {
         $('.insert', el).click(function () {

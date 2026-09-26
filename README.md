@@ -126,12 +126,15 @@ HTTP → admin/<page>.php
 - **主题函数**：主题 `functions.php` 中常用 `_e()` 国际化 / `Typecho_Widget::widget()` 取组件；改主题前看 `usr/themes/default/functions.php`。
 - **Dockerfile 已陈旧**：Ubuntu 16.04 + PHP 7.0.14，新部署勿用，要用 `tools/Makefile` 出的 tar.gz + 自己装 PHP-FPM/nginx。
 - **Makefile 用 tar.gz 打包**：`tools/Makefile` 的 `package` target 输出 `build.tar.gz`，**不是** `.zip`；CI 的 zip 是 `.github/workflows/Typecho-release-Ci.yml` 用 `zip -q -r typecho.zip *` 打的。
+- **本地开发环境在 WSL 里跑**：PHP 8.2 + Docker 装在 WSL "Android"（实际 Ubuntu 20.04）发行版中，MySQL 容器 `mysql_test` 映射端口 `13307`。完整启动流程与账号密码见 `.claude/docs/typecho-DEVELOPER_RULES.md` §本地开发环境。
+- **MySQL CREATE USER 密码陷阱**：在 `docker exec sh -c` 下 `IDENTIFIED BY` 不可靠，必须 `ALTER USER` 重置一次；详见 DEVELOPER_RULES 的「已知坑」。
 
 ## 八、文档地图（按场景 pointer 表）
 
 | 场景 | 读哪份 |
 |---|---|
 | 第一次接触项目 | 本 README + `CLAUDE.md` |
+| 启动本地开发环境 | `.claude/docs/typecho-DEVELOPER_RULES.md` §本地开发环境 |
 | 改核心库/框架 | `CLAUDE.md §1 架构分层` + `var/Typecho/Widget.php` + `Router.php` |
 | 改后台页面 | `CLAUDE.md §1` + `admin/` 目录 + 对应 Widget 源码 |
 | 改数据库适配 | `var/Typecho/Db/Adapter/` + `CLAUDE.md §0.4` 已知缺口 |

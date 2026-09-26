@@ -252,7 +252,8 @@ xmlns:dc="http://purl.org/dc/elements/1.1/">' . self::EOL;
 xmlns:content="http://purl.org/rss/1.0/modules/content/"
 xmlns:dc="http://purl.org/dc/elements/1.1/"
 xmlns:slash="http://purl.org/rss/1.0/modules/slash/"
-xmlns:atom="http://www.w3.org/2005/Atom">
+xmlns:atom="http://www.w3.org/2005/Atom"
+xmlns:wfw="http://wellformedweb.org/CommentAPI/">
 <channel>' . self::EOL;
 
             $content = '';
@@ -290,6 +291,9 @@ xmlns:atom="http://www.w3.org/2005/Atom">
                 }
 
                 $content .= '<comments>' . $item['link'] . '#comments</comments>' . self::EOL;
+                if (!empty($item['commentsFeedUrl'])) {
+                    $content .= '<wfw:commentRss>' . $item['commentsFeedUrl'] . '</wfw:commentRss>' . self::EOL;
+                }
 
                 if (!empty($item['suffix'])) {
                     $content .= $item['suffix'];

@@ -32,7 +32,7 @@
 
 | 路径 | 内容 | 何时读 |
 |---|---|---|
-| `.claude/docs/typecho-DEVELOPER_RULES.md` | 模块依赖 / 构建系统 / Git 规范 / 环境变量 | 改构建/依赖/CI 时 |
+| `.claude/docs/typecho-DEVELOPER_RULES.md` | 模块依赖 / 构建系统 / 本地开发环境（WSL+Docker 启动流程+账号密码） / Git 规范 / 环境变量 | 改构建/依赖/CI/启动环境时 |
 | `.claude/docs/typecho-GAPS.md` | 当前已知缺口（G1~Gn / T1~Tn / 外部依赖） | 动代码前必查 |
 | `.claude/planning/README.md` | planning 总览（5 子目录职责） | 了解文档结构 |
 | `.claude/planning/glossary.md` | 领域术语表 + OpenQ | 引入新术语/未决问题时 |
@@ -74,6 +74,76 @@
 
 - 动代码前必须先对 `.claude/docs/typecho-GAPS.md`；
 - 当前 GAPS 文档已建但为初始模板状态，待第一轮调研后补充具体缺口（详见 `typecho-GAPS.md`）。
+
+## 0.5 快速调试（冷启动 → 验证 → 常见故障）
+
+> 本节让新对话**只读 CLAUDE.md** 即可启动、验证、排查项目。完整流程（重装、重建数据库等）见 `.claude/docs/typecho-DEVELOPER_RULES.md` §本地开发环境。
+
+### 环境拓扑
+
+```
+Windows 主机 (E:\deepseek_work\typecho)
+  └─ WSL "Android" (Ubuntu 20.04.6 LTS, 名称有误导)
+       ├─ Docker 28.1.1 → mysql_test-mysql_test-1 (mysql:8.0.39)
+       │                    宿主机端口 13307 → 容器 3306
+       └─ PHP 8.2.28 Dev Server → 0.0.0.0:8000
+```
+
+Windows 通过 WSL2 端口转发访问，浏览器直接 `localhost:8000`。
+
+### 一键启动
+
+```bash
+# Step 1: 确认 WSL 运行中
+wsl -l -v    # "Android" 行状态应为 Running
+
+# Step 2: 启动 MySQL 容器（若已运行则跳过）
+wsl -d Android -- docker start mysql_test-mysql_test-1
+
+# Step 3: 启动 PHP Dev Server（若已运行则跳过）
+wsl -d Android -- bash -c \
+  'cd /mnt/e/deepseek_work/typecho && \
+   setsid nohup php -S 0.0.0.0:8000 -t . > /tmp/php-server.log 2>&1 < /dev/null &'
+
+# Step 4: 验证（全部通过才算就绪）
+curl -s -o /dev/null -w "%{http_code}" http://localhost:8000/
+# → 200 = 前台正常
+
+wsl -d Android -- php -r "\$p=new PDO('mysql:host=127.0.0.1;port=13307;dbname=typecho','typecho','typecho_dev_2026');echo \$p->getAttribute(PDO::ATTR_SERVER_VERSION);"
+# → 8.0.39 = 数据库连通
+```
+
+### 关键信息速查
+
+| 项目 | 值 |
+|---|---|
+| 前台 | http://localhost:8000/ |
+| 后台 | http://localhost:8000/admin/ |
+| 安装向导 | http://localhost:8000/install.php （已安装 → 302 到 `/`） |
+| MySQL | 127.0.0.1:13307 |
+| PHP Server 日志 | WSL 内 `/tmp/php-server.log` |
+| MySQL root 密码 | `2SsNbn3EwPdMKdDk` |
+| MySQL 应用用户 | `typecho` / `typecho_dev_2026` |
+| Typecho 管理员 | `admin` / `admin123` |
+| config.inc.php | 位于项目根目录，不进 git，由 install.php 自动生成 |
+
+### 常见故障速查
+
+| 症状 | 原因 | 解决 |
+|---|---|---|
+| `localhost:8000` 超时 | PHP Server 未启动或 WSL 未运行 | `wsl -l -v` 确认 Running；重跑 Step 3 |
+| MySQL 连接被拒 | 容器未运行 | `wsl -d Android -- docker start mysql_test-mysql_test-1` |
+| `Access denied for user 'typecho'` | 密码未生效 | 见下方「密码修复」 |
+| install.php 不进向导 | `typecho_options.installed=1` | 见 DEVELOPER_RULES 重装步骤 |
+| agent-browser 表单不提交 | jQuery AJAX 兼容问题 | 用 `curl -X POST` 代替浏览器提交 |
+
+### 密码修复
+
+```bash
+# typecho 应用用户密码重置（ALTER USER 必须，CREATE USER 的 IDENTIFIED BY 在 sh -c 下不可靠）
+wsl -d Android -- docker exec -e MYSQL_PWD=2SsNbn3EwPdMKdDk mysql_test-mysql_test-1 \
+  mysql -uroot -e "ALTER USER 'typecho'@'%' IDENTIFIED BY 'typecho_dev_2026'; FLUSH PRIVILEGES;"
+```
 
 ## 1. 架构分层与请求流
 

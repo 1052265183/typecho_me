@@ -424,11 +424,11 @@ class XmlRpc extends Contents implements ActionInterface, Hook
         /** 调用已有组件 */
         if ('page' == $type) {
             $widget = PageEdit::alloc(null, $input, function (PageEdit $page) {
-                $page->prepare()->writePage();
+                $page->writePage();
             });
         } else {
             $widget = PostEdit::alloc(null, $input, function (PostEdit $post) {
-                $post->prepare()->writePost();
+                $post->writePost();
             });
         }
 

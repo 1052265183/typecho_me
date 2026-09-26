@@ -549,14 +549,10 @@ EOF;
 
             $params = array_map(function ($string) {
                 $string = str_replace(['%0d', '%0a'], '', strip_tags($string));
-                $string = preg_replace([
+                return preg_replace([
                     "/\(\s*([\"'])/i",           //函数开头
                     "/([\"'])\s*\)/i",           //函数结尾
                 ], '', $string);
-                // Remove quotes and other dangerous characters that could be used for XSS attacks
-                // These characters can break out of HTML attributes
-                $string = str_replace(['"', "'", '<', '>'], '', $string);
-                return $string;
             }, $params);
 
             return self::buildUrl($params);

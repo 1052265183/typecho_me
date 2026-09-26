@@ -106,6 +106,140 @@ cd tools && make package && cd ..
 # 产物：tools/build.tar.gz（含 LICENSE.txt + index.php + install.php + admin + install + usr + var）
 ```
 
+## 本地开发环境（WSL + Docker）
+
+> 本节记录当前开发机的本地启动流程与全部账号密码，AI 接手时按此步骤可直接复现环境。
+
+### 环境架构
+
+```
+Windows 主机 (E:\deepseek_work\typecho)
+  └─ WSL "Android" (Ubuntu 20.04.6 LTS)
+       ├─ Docker 28.1.1
+       │   └─ mysql_test-mysql_test-1  (mysql:8.0.39, 13307→3306)
+       └─ PHP 8.2.28 Dev Server        (0.0.0.0:8000)
+```
+
+Windows 通过 WSL2 端口转发自动将 WSL 的 8000 映射到本机，浏览器直接访问 `localhost:8000`。
+
+### 启动流程
+
+#### Step 1 — 启动 WSL
+
+```bash
+wsl -d Android
+wsl -l -v    # 确认状态为 Running
+```
+
+> ⚠️ 发行版名称 `Android` 有误导，实际是 **Ubuntu 20.04.6 LTS**，内含 PHP 8.2 + Docker，与 Android 模拟器无关。
+
+#### Step 2 — 启动 MySQL 容器
+
+```bash
+wsl -d Android -- docker start mysql_test-mysql_test-1
+wsl -d Android -- docker ps --filter name=mysql_test
+# 期望输出: Up, 0.0.0.0:13307->3306/tcp
+```
+
+容器 root 密码通过环境变量 `MYSQL_ROOT_PASSWORD` 注入（见下方账号表），**不预建业务库**。
+
+#### Step 3 — 启动 PHP Dev Server
+
+```bash
+wsl -d Android -- bash -c \
+  'cd /mnt/e/deepseek_work/typecho && \
+   setsid nohup php -S 0.0.0.0:8000 -t . > /tmp/php-server.log 2>&1 < /dev/null &'
+```
+
+确认监听：
+```bash
+wsl -d Android -- ss -tlnp | grep :8000
+# 期望: LISTEN 0 4096 0.0.0.0:8000 ...
+```
+
+#### Step 4 — 验证
+
+| 验证项 | 方法 | 期望 |
+|---|---|---|
+| 前台 | 浏览器打开 `http://localhost:8000/` | 200，标题 "Hello World" |
+| 后台 | 浏览器打开 `http://localhost:8000/admin/` | 跳转登录页 |
+| 安装重定向 | 浏览器打开 `http://localhost:8000/install.php` | 302 → `/`（已安装） |
+| 数据库连通 | `wsl -d Android -- php /mnt/e/deepseek_work/typecho/.claude/tmp/verify_install.php` | 7 张表 + `installed=1` |
+
+### 账号密码汇总
+
+| 用途 | 地址 | 用户名 | 密码 |
+|---|---|---|---|
+| MySQL root（容器管理用） | 127.0.0.1:13307 | `root` | `2SsNbn3EwPdMKdDk` |
+| MySQL 应用用户（Typecho 连接） | 127.0.0.1:13307 | `typecho` | `typecho_dev_2026` |
+| Typecho 管理员后台 | http://localhost:8000/admin/ | `admin` | `admin123` |
+
+### config.inc.php 关键字段
+
+```php
+$db = new \Typecho\Db('Pdo_Mysql', 'typecho_');
+$db->addServer(array (
+  'host'      => '127.0.0.1',
+  'port'      => 13307,
+  'user'      => 'typecho',
+  'password'  => 'typecho_dev_2026',
+  'charset'   => 'utf8mb4',
+  'database'  => 'typecho',
+  'engine'    => 'InnoDB',
+  'sslVerify' => false,
+), \Typecho\Db::READ | \Typecho\Db::WRITE);
+```
+
+### 数据库表结构
+
+安装完成后自动创建 7 张表（前缀 `typecho_`）：
+
+```
+typecho_comments     评论
+typecho_contents     文章/页面
+typecho_fields       用户附加字段
+typecho_metas        分类/标签
+typecho_options      站点配置
+typecho_relationships 文章-分类关联
+typecho_users        用户
+```
+
+### 重新安装
+
+若需从零重装：
+
+```bash
+# 1. 删除 config.inc.php（让它回到未安装状态）
+rm E:\deepseek_work\typecho\config.inc.php
+
+# 2. 清空数据库
+wsl -d Android -- docker exec -e MYSQL_PWD=2SsNbn3EwPdMKdDk mysql_test-mysql_test-1 \
+  mysql -uroot -e "DROP DATABASE IF EXISTS typecho; CREATE DATABASE typecho CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci;"
+
+# 3. 重建用户（ALTER USER 重置密码，CREATE USER 的 IDENTIFIED BY 在 sh -c 中不可靠）
+wsl -d Android -- docker exec -e MYSQL_PWD=2SsNbn3EwPdMKdDk mysql_test-mysql_test-1 \
+  mysql -uroot -e "CREATE USER IF NOT EXISTS 'typecho'@'%' IDENTIFIED BY 'typecho_dev_2026'; ALTER USER 'typecho'@'%' IDENTIFIED BY 'typecho_dev_2026'; GRANT ALL ON typecho.* TO 'typecho'@'%'; FLUSH PRIVILEGES;"
+
+# 4. 用 curl 完成三步安装（浏览器 AJAX 有兼容问题，curl 更稳定）
+#    Step 1: 环境检查（POST 空表单即可）
+curl -s -X POST http://127.0.0.1:8000/install.php -d 'step=1'
+#    Step 2: 数据库配置
+curl -s -X POST http://127.0.0.1:8000/install.php \
+  -d 'step=2&dbAdapter=Pdo_Mysql&dbPrefix=typecho_&dbHost=127.0.0.1&dbUser=typecho&dbPassword=typecho_dev_2026&dbDatabase=typecho&dbPort=13307&dbCharset=utf8mb4&dbEngine=InnoDB&dbSslVerify=off&dbNext=none'
+#    Step 3: 管理员账户
+curl -s -X POST http://127.0.0.1:8000/install.php \
+  -d 'step=3&userUrl=http://localhost:8000&userName=admin&userPassword=admin123&userMail=admin@localhost.local'
+```
+
+### 已知坑
+
+1. **WSL 发行版名称误导**：`Android` 实际是 Ubuntu 20.04.6 LTS，与 Android 模拟器无关。
+2. **MySQL `CREATE USER ... IDENTIFIED BY` 密码不生效**：在 `docker exec sh -c` 环境下，`IDENTIFIED BY` 的密码可能被 shell 吞掉特殊字符。首次建用户后**必须**用 `ALTER USER` 重置一次才能生效。
+3. **`config.inc.php` 不进 git**：该文件由 `install.php` 自动生成，已在 `.gitignore` 中。
+4. **安装状态持久化**：`typecho_options.installed=1` 后，`install.php` 自动重定向到首页。重新访问 `install.php` 不会再次进入安装向导。
+5. **agent-browser 无法触发 AJAX 表单**：install.php 的表单提交通过 jQuery AJAX + FormData 实现，agent-browser 的按钮点击无法正确拦截 `form.submit` 事件。改用 `curl -X POST` 直接提交表单数据。
+6. **端口 13307 非标准**：MySQL 容器映射到宿主机 `13307` 而非默认 `3306`，连接时务必指定端口。
+
 ## Git 规范
 
 - 仓库分支：`master`（唯一长期分支）；hotfix 分支按需临时创建（CI workflow `Typecho-hotfix-Merge.yml`）。
