@@ -109,7 +109,7 @@ wsl -d Android -- bash -c \
 curl -s -o /dev/null -w "%{http_code}" http://localhost:8000/
 # → 200 = 前台正常
 
-wsl -d Android -- php -r "\$p=new PDO('mysql:host=127.0.0.1;port=13307;dbname=typecho','typecho','typecho_dev_2026');echo \$p->getAttribute(PDO::ATTR_SERVER_VERSION);"
+wsl -d Android -- php -r "\$p=new PDO('mysql:host=127.0.0.1;port=13307;dbname=jbxfamr4fjr4ahaz;charset=utf8mb4','cGnMYsk8eccP6iHr','eLk5ycRJrYebL5XF');echo \$p->getAttribute(PDO::ATTR_SERVER_VERSION);"
 # → 8.0.39 = 数据库连通
 ```
 
@@ -122,9 +122,10 @@ wsl -d Android -- php -r "\$p=new PDO('mysql:host=127.0.0.1;port=13307;dbname=ty
 | 安装向导 | http://localhost:8000/install.php （已安装 → 302 到 `/`） |
 | MySQL | 127.0.0.1:13307 |
 | PHP Server 日志 | WSL 内 `/tmp/php-server.log` |
-| MySQL root 密码 | `2SsNbn3EwPdMKdDk` |
-| MySQL 应用用户 | `typecho` / `typecho_dev_2026` |
-| Typecho 管理员 | `admin` / `admin123` |
+| MySQL root 密码 | **不可用**——datadir 还原自 `mysql_WLzr` 备份，容器 env 的 `MYSQL_ROOT_PASSWORD` 只在首次初始化生效，还原后失效 |
+| MySQL 应用用户（Typecho 连接） | `cGnMYsk8eccP6iHr` / `eLk5ycRJrYebL5XF` |
+| MySQL 数据库名 | `jbxfamr4fjr4ahaz` |
+| Typecho 管理员 | `huxu` / **密码未知**（库中哈希非 .env 旧值；重置见下方「管理员密码重置」） |
 | config.inc.php | 位于项目根目录，不进 git，由 install.php 自动生成 |
 
 ### 常见故障速查
@@ -133,17 +134,26 @@ wsl -d Android -- php -r "\$p=new PDO('mysql:host=127.0.0.1;port=13307;dbname=ty
 |---|---|---|
 | `localhost:8000` 超时 | PHP Server 未启动或 WSL 未运行 | `wsl -l -v` 确认 Running；重跑 Step 3 |
 | MySQL 连接被拒 | 容器未运行 | `wsl -d Android -- docker start mysql_test-mysql_test-1` |
-| `Access denied for user 'typecho'` | 密码未生效 | 见下方「密码修复」 |
+| `Access denied for user 'cGnMYsk8eccP6iHr'` | 密码错误或容器未运行 | 确认密码 `eLk5ycRJrYebL5XF`；确认容器运行 |
 | install.php 不进向导 | `typecho_options.installed=1` | 见 DEVELOPER_RULES 重装步骤 |
 | agent-browser 表单不提交 | jQuery AJAX 兼容问题 | 用 `curl -X POST` 代替浏览器提交 |
 
-### 密码修复
+### 管理员密码重置
+
+Typecho 管理员密码是 phpass 哈希（`$P$` 开头）存于 `typecho_users`，**不经 MySQL**，所以不需要 root 权限。用项目自带的 `Utils\PasswordHash` 重算哈希后 UPDATE 即可：
 
 ```bash
-# typecho 应用用户密码重置（ALTER USER 必须，CREATE USER 的 IDENTIFIED BY 在 sh -c 下不可靠）
-wsl -d Android -- docker exec -e MYSQL_PWD=2SsNbn3EwPdMKdDk mysql_test-mysql_test-1 \
-  mysql -uroot -e "ALTER USER 'typecho'@'%' IDENTIFIED BY 'typecho_dev_2026'; FLUSH PRIVILEGES;"
+# 1. 生成新哈希（把 newpass 换成你要设的密码）
+wsl -d Android -- php -r 'require "/mnt/e/deepseek_work/typecho/var/Utils/PasswordHash.php";
+  $h = new \Utils\PasswordHash(8, true); echo $h->hashPassword("newpass");'
+
+# 2. 写回数据库（应用用户即可，无需 root）
+wsl -d Android -- docker exec -e MYSQL_PWD=eLk5ycRJrYebL5XF mysql_test-mysql_test-1 \
+  mysql -ucGnMYsk8eccP6iHr -h127.0.0.1 jbxfamr4fjr4ahaz \
+  -e "UPDATE typecho_users SET password='<上一步的哈希>' WHERE name='huxu';"
 ```
+
+> ⚠️ **MySQL 账号密码无法自助重置**：应用用户 `cGnMYsk8eccP6iHr` 仅有 `jbxfamr4fjr4ahaz` 库权限，读不了 `mysql.user`；root 密码因 datadir 还原而未知。若必须改 MySQL 账号密码，需走 `skip-grant-tables` 流程，且本次实测该模式下 `UPDATE` / `ALTER USER` 均不落盘（哈希未变），需先解决该问题——见 `.claude/planning/glossary.md` OQ-005。
 
 ## 1. 架构分层与请求流
 

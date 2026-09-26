@@ -30,6 +30,8 @@ usr/uploads/
 usr/*.db
 usr/plugins/
 !usr/plugins/HelloWorld
+TinyMceForTypecho/bak/
+TinyMceForTypecho/logs/
 usr/themes/*
 !usr/themes/default
 !usr/themes/classic-22

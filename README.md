@@ -126,8 +126,8 @@ HTTP → admin/<page>.php
 - **主题函数**：主题 `functions.php` 中常用 `_e()` 国际化 / `Typecho_Widget::widget()` 取组件；改主题前看 `usr/themes/default/functions.php`。
 - **Dockerfile 已陈旧**：Ubuntu 16.04 + PHP 7.0.14，新部署勿用，要用 `tools/Makefile` 出的 tar.gz + 自己装 PHP-FPM/nginx。
 - **Makefile 用 tar.gz 打包**：`tools/Makefile` 的 `package` target 输出 `build.tar.gz`，**不是** `.zip`；CI 的 zip 是 `.github/workflows/Typecho-release-Ci.yml` 用 `zip -q -r typecho.zip *` 打的。
-- **本地开发环境在 WSL 里跑**：PHP 8.2 + Docker 装在 WSL "Android"（实际 Ubuntu 20.04）发行版中，MySQL 容器 `mysql_test` 映射端口 `13307`。完整启动流程与账号密码见 `.claude/docs/typecho-DEVELOPER_RULES.md` §本地开发环境。
-- **MySQL CREATE USER 密码陷阱**：在 `docker exec sh -c` 下 `IDENTIFIED BY` 不可靠，必须 `ALTER USER` 重置一次；详见 DEVELOPER_RULES 的「已知坑」。
+- **本地开发环境在 WSL 里跑**：PHP 8.2 + Docker 装在 WSL "Android"（实际 Ubuntu 20.04）发行版中，MySQL 容器 `mysql_test` 映射端口 `13307`。快速启动 / 凭据 / 排障见 `CLAUDE.md` §0.5；完整还原流程见 `.claude/docs/typecho-DEVELOPER_RULES.md` §本地开发环境。
+- **datadir 还原后 root 密码失效**：容器 env 的 `MYSQL_ROOT_PASSWORD` 只在镜像首次初始化时写入，替换 datadir 后失效；此时唯一可用凭据是备份中已存在的应用用户，改 MySQL 账号密码需先解决 `skip-grant-tables` 不落盘的问题（`glossary.md` OQ-005）。
 
 ## 八、文档地图（按场景 pointer 表）
 

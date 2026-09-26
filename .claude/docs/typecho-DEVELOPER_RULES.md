@@ -114,13 +114,15 @@ cd tools && make package && cd ..
 
 ```
 Windows 主机 (E:\deepseek_work\typecho)
-  └─ WSL "Android" (Ubuntu 20.04.6 LTS)
+  └─ WSL "Android" (Ubuntu 20.04.6 LTS，名称有误导)
        ├─ Docker 28.1.1
        │   └─ mysql_test-mysql_test-1  (mysql:8.0.39, 13307→3306)
        └─ PHP 8.2.28 Dev Server        (0.0.0.0:8000)
 ```
 
 Windows 通过 WSL2 端口转发自动将 WSL 的 8000 映射到本机，浏览器直接访问 `localhost:8000`。
+
+> 完整调试信息（启动 / 验证 / 排障 / 管理员密码重置）见 `CLAUDE.md` §0.5，本节只补充它不承载的细节。
 
 ### 启动流程
 
@@ -131,8 +133,6 @@ wsl -d Android
 wsl -l -v    # 确认状态为 Running
 ```
 
-> ⚠️ 发行版名称 `Android` 有误导，实际是 **Ubuntu 20.04.6 LTS**，内含 PHP 8.2 + Docker，与 Android 模拟器无关。
-
 #### Step 2 — 启动 MySQL 容器
 
 ```bash
@@ -140,8 +140,6 @@ wsl -d Android -- docker start mysql_test-mysql_test-1
 wsl -d Android -- docker ps --filter name=mysql_test
 # 期望输出: Up, 0.0.0.0:13307->3306/tcp
 ```
-
-容器 root 密码通过环境变量 `MYSQL_ROOT_PASSWORD` 注入（见下方账号表），**不预建业务库**。
 
 #### Step 3 — 启动 PHP Dev Server
 
@@ -151,94 +149,112 @@ wsl -d Android -- bash -c \
    setsid nohup php -S 0.0.0.0:8000 -t . > /tmp/php-server.log 2>&1 < /dev/null &'
 ```
 
-确认监听：
-```bash
-wsl -d Android -- ss -tlnp | grep :8000
-# 期望: LISTEN 0 4096 0.0.0.0:8000 ...
-```
+### 凭据现状（还原后实测）
 
-#### Step 4 — 验证
-
-| 验证项 | 方法 | 期望 |
-|---|---|---|
-| 前台 | 浏览器打开 `http://localhost:8000/` | 200，标题 "Hello World" |
-| 后台 | 浏览器打开 `http://localhost:8000/admin/` | 跳转登录页 |
-| 安装重定向 | 浏览器打开 `http://localhost:8000/install.php` | 302 → `/`（已安装） |
-| 数据库连通 | `wsl -d Android -- php /mnt/e/deepseek_work/typecho/.claude/tmp/verify_install.php` | 7 张表 + `installed=1` |
-
-### 账号密码汇总
-
-| 用途 | 地址 | 用户名 | 密码 |
+| 用途 | 用户名 | 密码 | 权限 |
 |---|---|---|---|
-| MySQL root（容器管理用） | 127.0.0.1:13307 | `root` | `2SsNbn3EwPdMKdDk` |
-| MySQL 应用用户（Typecho 连接） | 127.0.0.1:13307 | `typecho` | `typecho_dev_2026` |
-| Typecho 管理员后台 | http://localhost:8000/admin/ | `admin` | `admin123` |
+| MySQL 应用用户（Typecho 连接） | `cGnMYsk8eccP6iHr` | `eLk5ycRJrYebL5XF` | 仅 `jbxfamr4fjr4ahaz` 库 |
+| MySQL root | — | **未知**（见下方说明） | 不可用 |
+| Typecho 管理员 | `huxu` | **未知**（可用 `CLAUDE.md` §0.5 重置） | — |
+
+**数据库**：`jbxfamr4fjr4ahaz`（8 张表 = 7 张 `typecho_*` + `typecho_wx_share`）
+**站点**：Thron的博客 / Typecho 1.3.0 / 主题 WaterDrop / 321 篇内容 / `installed=1`
+
+> ⚠️ **root 密码为何不可用**：datadir 是从 `mysql_WLzr` 容器整体还原的，其 `mysql.user` 表里 root 的哈希来自那套环境。容器 env 里的 `MYSQL_ROOT_PASSWORD=2SsNbn3EwPdMKdDk` **只在镜像首次初始化 datadir 时生效**，datadir 被整体替换后该变量失效，实测用 env 密码登录报 `Access denied`。
 
 ### config.inc.php 关键字段
 
 ```php
 $db = new \Typecho\Db('Pdo_Mysql', 'typecho_');
 $db->addServer(array (
-  'host'      => '127.0.0.1',
-  'port'      => 13307,
-  'user'      => 'typecho',
-  'password'  => 'typecho_dev_2026',
+  'host'      => '127.0.0.1',   // 备份里是 mysql_Ni7e（容器服务名），本地要改成 127.0.0.1
+  'port'      => 13307,         // 备份里是 3306（容器内网），本地映射端口
+  'user'      => 'cGnMYsk8eccP6iHr',
+  'password'  => 'eLk5ycRJrYebL5XF',
   'charset'   => 'utf8mb4',
-  'database'  => 'typecho',
+  'database'  => 'jbxfamr4fjr4ahaz',  // 备份里是 Jbxfamr4fJr4AhAZ，需小写（lower_case_table_names=1）
   'engine'    => 'InnoDB',
-  'sslVerify' => false,
+  'sslCa'     => NULL,
+  'sslVerify' => false,         // 备份里是 true，本地无 SSL 证书
 ), \Typecho\Db::READ | \Typecho\Db::WRITE);
 ```
 
-### 数据库表结构
+### 备份还原流程（已验证）
 
-安装完成后自动创建 7 张表（前缀 `typecho_`）：
+本次从宝塔备份还原站点，完整步骤如下，供下次重放：
 
-```
-typecho_comments     评论
-typecho_contents     文章/页面
-typecho_fields       用户附加字段
-typecho_metas        分类/标签
-typecho_options      站点配置
-typecho_relationships 文章-分类关联
-typecho_users        用户
-```
-
-### 重新安装
-
-若需从零重装：
+**Step 1 — 还原站点文件**
 
 ```bash
-# 1. 删除 config.inc.php（让它回到未安装状态）
-rm E:\deepseek_work\typecho\config.inc.php
+# 备份包结构：typecho_AGbF/{LICENSE.txt, .env, docker-compose.yml, data/}
+# data/ 即站点根目录内容（var/ usr/ 等），用 --strip-components=2 剥掉两层前缀
+wsl -d Android -- bash -c \
+  'cd /mnt/e/deepseek_work/typecho && \
+   tar -xzf "/mnt/f/1A开发备份/博客备份/typecho_AGbF_1790338087.tar.gz" \
+         --strip-components=2 typecho_AGbF/data/'
+```
 
-# 2. 清空数据库
-wsl -d Android -- docker exec -e MYSQL_PWD=2SsNbn3EwPdMKdDk mysql_test-mysql_test-1 \
-  mysql -uroot -e "DROP DATABASE IF EXISTS typecho; CREATE DATABASE typecho CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci;"
+**Step 2 — 还原 MySQL datadir**
 
-# 3. 重建用户（ALTER USER 重置密码，CREATE USER 的 IDENTIFIED BY 在 sh -c 中不可靠）
-wsl -d Android -- docker exec -e MYSQL_PWD=2SsNbn3EwPdMKdDk mysql_test-mysql_test-1 \
-  mysql -uroot -e "CREATE USER IF NOT EXISTS 'typecho'@'%' IDENTIFIED BY 'typecho_dev_2026'; ALTER USER 'typecho'@'%' IDENTIFIED BY 'typecho_dev_2026'; GRANT ALL ON typecho.* TO 'typecho'@'%'; FLUSH PRIVILEGES;"
+```bash
+# 注意：路径必须写死在 wsl 命令里，不能依赖 Windows 侧的 shell 变量
+wsl -d Android -- docker stop mysql_test-mysql_test-1
+wsl -d Android -- mv /www/dk_project/dk_app/mysql/mysql_test/data \
+                   /www/dk_project/dk_app/mysql/mysql_test/data_before_restore
 
-# 4. 用 curl 完成三步安装（浏览器 AJAX 有兼容问题，curl 更稳定）
-#    Step 1: 环境检查（POST 空表单即可）
-curl -s -X POST http://127.0.0.1:8000/install.php -d 'step=1'
-#    Step 2: 数据库配置
-curl -s -X POST http://127.0.0.1:8000/install.php \
-  -d 'step=2&dbAdapter=Pdo_Mysql&dbPrefix=typecho_&dbHost=127.0.0.1&dbUser=typecho&dbPassword=typecho_dev_2026&dbDatabase=typecho&dbPort=13307&dbCharset=utf8mb4&dbEngine=InnoDB&dbSslVerify=off&dbNext=none'
-#    Step 3: 管理员账户
-curl -s -X POST http://127.0.0.1:8000/install.php \
-  -d 'step=3&userUrl=http://localhost:8000&userName=admin&userPassword=admin123&userMail=admin@localhost.local'
+wsl -d Android -- bash -c \
+  'mkdir -p /tmp/mysql_restore && cd /tmp/mysql_restore && \
+   tar -xzf "/mnt/f/1A开发备份/博客备份/mysql_WLzr_1790338056.tar.gz" && \
+   mkdir -p /www/dk_project/dk_app/mysql/mysql_test/data && \
+   cp -a mysql_WLzr/data/* /www/dk_project/dk_app/mysql/mysql_test/data/'
+
+wsl -d Android -- docker start mysql_test-mysql_test-1
+```
+
+**Step 3 — 修 my.cnf 的 includedir 路径**
+
+原 `my.cnf` 写的是 `!includedir /etc/mysql/conf.d/`，但容器实际挂载点是 `/etc/mysql/mysql.conf.d`，路径不匹配会让 mysqld 启动即崩（`Can't read dir of '/etc/mysql/conf.d/[mysqld]'`）：
+
+```bash
+wsl -d Android -- sed -i 's|!includedir /etc/mysql/conf.d/|!includedir /etc/mysql/mysql.conf.d/|' \
+  /www/dk_project/dk_app/mysql/mysql_test/my.cnf
+wsl -d Android -- docker restart mysql_test-mysql_test-1
+```
+
+**Step 4 — 改 config.inc.php + 库内 siteUrl**
+
+改 host/port/database/sslVerify（见上表），并把库里的旧穿透域名改成本地：
+
+```bash
+wsl -d Android -- docker exec -e MYSQL_PWD=eLk5ycRJrYebL5XF mysql_test-mysql_test-1 \
+  mysql -ucGnMYsk8eccP6iHr -h127.0.0.1 jbxfamr4fjr4ahaz \
+  -e "UPDATE typecho_options SET value='http://localhost:8000' WHERE name='siteUrl';"
+```
+
+不改 siteUrl 的后果：页面 CSS/JS 全部指向旧域名 `http://xkj88.e3.luyouxia.net:29026`，前台白屏。
+
+**Step 5 — 验证**
+
+```bash
+# 前台 200 + 标题正确 + 数据库连通
+curl -s http://localhost:8000/ | grep -o '<title>[^<]*</title>'
+wsl -d Android -- docker exec -e MYSQL_PWD=eLk5ycRJrYebL5XF mysql_test-mysql_test-1 \
+  mysql -ucGnMYsk8eccP6iHr -h127.0.0.1 -N \
+  -e "SELECT COUNT(*) FROM typecho_contents;" jbxfamr4fjr4ahaz
 ```
 
 ### 已知坑
 
 1. **WSL 发行版名称误导**：`Android` 实际是 Ubuntu 20.04.6 LTS，与 Android 模拟器无关。
-2. **MySQL `CREATE USER ... IDENTIFIED BY` 密码不生效**：在 `docker exec sh -c` 环境下，`IDENTIFIED BY` 的密码可能被 shell 吞掉特殊字符。首次建用户后**必须**用 `ALTER USER` 重置一次才能生效。
-3. **`config.inc.php` 不进 git**：该文件由 `install.php` 自动生成，已在 `.gitignore` 中。
-4. **安装状态持久化**：`typecho_options.installed=1` 后，`install.php` 自动重定向到首页。重新访问 `install.php` 不会再次进入安装向导。
-5. **agent-browser 无法触发 AJAX 表单**：install.php 的表单提交通过 jQuery AJAX + FormData 实现，agent-browser 的按钮点击无法正确拦截 `form.submit` 事件。改用 `curl -X POST` 直接提交表单数据。
-6. **端口 13307 非标准**：MySQL 容器映射到宿主机 `13307` 而非默认 `3306`，连接时务必指定端口。
+2. **`MYSQL_ROOT_PASSWORD` 在 datadir 还原后失效**：该变量只在镜像首次初始化 datadir 时写入 root 密码；整体替换 datadir 后，容器 env 与 `mysql.user` 表不一致，env 密码无法登录。
+3. **还原 datadir 会一并还原全部账号**：备份来自另一套环境，里面有 gitea 等无关库和多个混淆库名（本例 10 个库，站点库 `jbxfamr4fjr4ahaz` 只是其中之一）。还原后应用用户权限只覆盖站点库，其他库不可见。
+4. **库名大小写**：备份 `.env` 里是 `Jbxfamr4fJr4AhAZ`，但 `lower_case_table_names=1`，实际库名是小写 `jbxfamr4fjr4ahaz`，`config.inc.php` 必须写小写否则连不上。
+5. **siteUrl 决定静态资源域名**：站点数据存在 `typecho_options.siteUrl`，还原后不改会让所有 CSS/JS 指向旧域名，页面看起来加载失败。
+6. **`skip-grant-tables` 下改密码不落盘**：实测 `UPDATE mysql.user ...`、`ALTER USER`、`CREATE USER` 均返回成功但 `authentication_string` 哈希未变，重启后凭据不生效。原因待查（见 glossary OQ-005），当前对策是直接使用备份中已存在的应用用户。
+7. **my.cnf 的 includedir 路径**：写 `!includedir` 时行尾不要误写成 `.../conf.d/[mysqld]`，且目录名必须与容器挂载点一致（`mysql.conf.d`），否则 mysqld 启动即崩进重启循环。
+8. **PowerShell 不支持 `<` 输入重定向**：`mysql ... < file.sql` 会在 PowerShell 侧报 `The '<' operator is reserved`。改用 `mysql -e "source /path/file.sql"`，或把命令写进 `.sh` 脚本再 `wsl ... bash script.sh`。
+9. **agent-browser 无法触发 install.php 的 AJAX 表单**：install.php 用 jQuery `$.ajax` + `FormData` 提交，浏览器点击无法可靠拦截 `form.submit`；改用 `curl -X POST` 直接提交更稳。
+10. **端口 13307 非标准**：MySQL 容器映射到宿主机 `13307` 而非默认 `3306`，连接时务必指定端口。
 
 ## Git 规范
 
