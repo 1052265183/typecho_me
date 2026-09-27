@@ -5,7 +5,7 @@
 
 ## 当前状态
 
-初始化阶段尚未产生 ADR。本仓库历史悠久，README/CONTRIBUTING/源码中蕴含大量「先验决策」（如 PHP 版本选择、Widget 自研机制、4 数据库适配方案），但未按 ADR 形式沉淀。后续如有重大技术决策（重构、依赖变更、PHP 版本升级、数据库 schema 变动等），按 writing-for-agents 流程补写。
+已产生 1 条 ADR（ADR-001，2026-09-27，WaterDrop 主题复制按钮与 PJAX 脚本注入架构）。本仓库历史悠久，README/CONTRIBUTING/源码中蕴含大量「先验决策」（如 PHP 版本选择、Widget 自研机制、4 数据库适配方案），但未按 ADR 形式沉淀。后续如有重大技术决策（重构、依赖变更、PHP 版本升级、数据库 schema 变动等），按 writing-for-agents 流程补写。
 
 ## ADR 模板
 
@@ -34,7 +34,7 @@
 
 | ADR | 主题 | 状态 | 日期 | 影响范围 |
 |---|---|---|---|---|
-| _（待补）_ | — | — | — | — |
+| [ADR-001](ADR-001-WaterDrop复制按钮与PJAX脚本注入架构.md) | WaterDrop 复制按钮与 PJAX 脚本注入架构 | 已采纳 | 2026-09-27 | `usr/themes/WaterDrop/` |
 
 ## 修订规则
 

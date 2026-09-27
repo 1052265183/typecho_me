@@ -19,5 +19,5 @@
 
 ## 当前状态
 
-- 五个子目录骨架已建（含 `.gitkeep` 占位），尚未填充文档——后续调研与决策按 writing-for-agents 沉淀。
-- 详见 `.claude/planning/glossary.md` 与 `.claude/planning/02-技术设计/ADR-README.md`。
+- 五个子目录骨架已建；`02-技术设计/` 已有 `架构图.md`、`ADR-README.md` 索引与 ADR-001（2026-09-27）；`glossary.md` 已收录术语与 OQ-001~005。
+- 后续调研与决策继续按 writing-for-agents 沉淀；详见 `.claude/planning/glossary.md` 与 `.claude/planning/02-技术设计/ADR-README.md`。

@@ -28,6 +28,25 @@
 - 改代码后必须更新本文件相关章节；若引入新概念、新决策，同步更新 `.claude/planning/glossary.md` 与 `.claude/planning/02-技术设计/ADR-xxx.md`。
 - 架构/产品/依赖变更必须先写 ADR 沉淀，后动代码。
 
+### 文档更新联动（强制，按表逐项检查）
+
+产生或变更任何文档时，按本次改动类型逐行对照下表，每行完成判据满足才算结束；先按「文档更新技能纪律」加载 grill-with-docs + writing-for-agents 技能，再读现有文档、再动笔：
+
+| 改动类型 | 必联动位置 | 完成判据 |
+|---|---|---|
+| 改代码 | 本文件对应章节 | 章节描述与代码实际行为一致 |
+| 新技术决策 | `02-技术设计/ADR-NNN-<主题>.md` + `ADR-README.md` 索引表 | 索引表能查到该决策 |
+| 新术语 / 新缩写 | `glossary.md` 术语或缩写表 | 新词有定义、有出处指针 |
+| 新缺口 / 待办 / 开放问题 | `typecho-GAPS.md`（G/T/E 编号）或 `glossary.md` OpenQ（OQ 编号） | 有编号、有行动项 |
+| 踩坑复现型知识 | `README.md` §七常见坑（一行 + 指针） | 接手者照坑清单可避坑 |
+| 状态类措辞变化 | 全局扫 stale：`planning/README.md` 当前状态、GAPS 对应条目、`README.md` §五 | grep 旧状态词（"尚未产生""索引为空""待补"等）无残留 |
+
+**单一信源分层**（同一语义只在一处展开，其余放一行指针）：
+
+- 行动指令（做什么）→ 本文件对应章节；决策与理由（为什么）→ ADR；术语定义 → `glossary.md`
+- 跨文档引用用"触发词 + 指针"（如"决策与理由见 ADR-001"），指针措辞前置触发条件
+- 交叉引用自查收尾：`README.md` §八文档地图、`ADR-README.md` 索引、`glossary.md` 三处互相指向成立
+
 ## 0.2 文档索引（完整，按目录遍历）
 
 | 路径 | 内容 | 何时读 |
@@ -177,6 +196,11 @@ wsl -d Android -- docker exec -e MYSQL_PWD=eLk5ycRJrYebL5XF mysql_test-mysql_tes
 
 - **插件**：`usr/plugins/<PluginName>/Plugin.php`（示例 `HelloWorld/Plugin.php`）；实现 `\Typecho\Plugin\PluginInterface`；通过 `Typecho\Plugin::factory('<hook_point>')` 挂载钩子。
 - **主题**：`usr/themes/<theme_name>/`；至少含 `functions.php` / `index.php` / `header.php` / `footer.php` / `comments.php` / `404.php` / `page.php` / `post.php` / `style.css`；可选 `screenshot.png`。
+- **主题 PJAX 脚本纪律（WaterDrop 实践，决策与理由见 ADR-001）**：WaterDrop 启用 PJAX（只替换 `title/meta/header/#main`），`footer.php` 内联脚本只在整页加载执行一次。给主题加 DOM 注入型功能必须遵守：
+  1. **注入抽函数**：注入逻辑封装成函数，整页加载调一次、`pjax:complete` 里再调一次，已注入的元素跳过防重复；
+  2. **复杂逻辑外置 + 委托**：交互逻辑放 `static/js/` 独立文件（IIFE + `window.__XXX_LOADED` 标记防重），事件用 `document` 委托绑定（`#main` 内直绑随 PJAX 换页失效）；剪贴板类功能必须带 `document.execCommand("copy")` 兜底（http 下 `navigator.clipboard` 静默失败）；
+  3. **首屏 fail-open**：内联脚本开头先带 null 保护地隐藏 `#loader`、显示 `#body`，后续任何 JS 报错都不卡"数据加载中"首屏；
+  4. **浏览器实测**：`php -l` 只查 PHP 层，`</script>` 闭合缺失等 HTML 层问题只有真实浏览器整页加载能暴露——主题改动后必须浏览器验证。
 - **语言包**：`usr/langs/<lang>.mo`（由 `tools/Makefile langs` 拉取 `typecho/languages` 编译）；源代码用 `tools/build_pot.php` 生成 `messages.pot`。
 
 ## 4. 构建与发版

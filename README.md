@@ -92,7 +92,7 @@ HTTP → admin/<page>.php
 
 ## 五、关键决策索引（ADR-xxx）
 
-当前 ADR 索引见 `.claude/planning/02-技术设计/ADR-README.md`（初始化阶段尚未产生 ADR，后续技术决策按 writing-for-agents 沉淀）。
+当前 ADR 索引见 `.claude/planning/02-技术设计/ADR-README.md`。已有 ADR-001（WaterDrop 复制按钮与 PJAX 脚本注入架构，2026-09-27）；仓库历史先验决策（自研 Widget、4 数据库适配等）待按 writing-for-agents 逐步沉淀（GAPS T2）。
 
 ## 六、代码入口（接手先看）
 
@@ -124,6 +124,7 @@ HTTP → admin/<page>.php
 - **数据库适配**：`Db.php` 通过 `Adapter` 抽象 4 种数据库，新增 SQL 必须 4 库都跑通（`Mysql` / `Pgsql` / `SQLite` + `Pdo` 子类）。
 - **插件钩子**：钩子命名是字符串（如 `index.php` / `begin` / `end`），**注意大小写一致**。
 - **主题函数**：主题 `functions.php` 中常用 `_e()` 国际化 / `Typecho_Widget::widget()` 取组件；改主题前看 `usr/themes/default/functions.php`。
+- **主题 PJAX 脚本**：WaterDrop 启用 PJAX，`footer.php` 内联脚本只在整页加载执行一次；注入型功能必须挂 `pjax:complete` 重跑，`</script>` 闭合缺失 `php -l` 查不出、只有浏览器实测能暴露——4 条纪律见 `CLAUDE.md` §3，决策与理由见 ADR-001。
 - **Dockerfile 已陈旧**：Ubuntu 16.04 + PHP 7.0.14，新部署勿用，要用 `tools/Makefile` 出的 tar.gz + 自己装 PHP-FPM/nginx。
 - **Makefile 用 tar.gz 打包**：`tools/Makefile` 的 `package` target 输出 `build.tar.gz`，**不是** `.zip`；CI 的 zip 是 `.github/workflows/Typecho-release-Ci.yml` 用 `zip -q -r typecho.zip *` 打的。
 - **本地开发环境在 WSL 里跑**：PHP 8.2 + Docker 装在 WSL "Android"（实际 Ubuntu 20.04）发行版中，MySQL 容器 `mysql_test` 映射端口 `13307`。快速启动 / 凭据 / 排障见 `CLAUDE.md` §0.5；完整还原流程见 `.claude/docs/typecho-DEVELOPER_RULES.md` §本地开发环境。
@@ -139,7 +140,7 @@ HTTP → admin/<page>.php
 | 改后台页面 | `CLAUDE.md §1` + `admin/` 目录 + 对应 Widget 源码 |
 | 改数据库适配 | `var/Typecho/Db/Adapter/` + `CLAUDE.md §0.4` 已知缺口 |
 | 写插件 | `usr/plugins/HelloWorld/Plugin.php` + http://docs.typecho.org/plugins/ |
-| 写主题 | `usr/themes/default/` + http://docs.typecho.org/themes/ |
+| 写主题 | `usr/themes/default/` + `CLAUDE.md` §3（主题 PJAX 脚本纪律）+ http://docs.typecho.org/themes/ |
 | 改构建/CI | `.claude/docs/typecho-DEVELOPER_RULES.md` + `.github/workflows/` |
 | 排查 bug | `.claude/bugs/<bugId>/bug_detail.txt`（新建按规则第 3 步目录命名） |
 | 调研未决问题 | `.claude/planning/glossary.md` OpenQ 区 + `.claude/docs/typecho-GAPS.md` |

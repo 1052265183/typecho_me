@@ -35,5 +35,6 @@ TinyMceForTypecho/logs/
 usr/themes/*
 !usr/themes/default
 !usr/themes/classic-22
+!usr/themes/WaterDrop
 node_modules/
 tools/tmp/

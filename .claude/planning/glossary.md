@@ -17,6 +17,7 @@
 | **Object Pool** | `Widget::$widgetPool` 静态数组，缓存 widget 实例避免重复构造 | 见 `var/Typecho/Widget.php` 第 26-32 行 |
 | **Pingback** | XML-RPC 协议的应用，用于博客引用通知；Typecho 服务端实现见 `var/IXR/Pingback.php` | — |
 | **Nightly** | 每日构建，由 `.github/workflows/Typecho-dev-Ci.yml` 在 dev push 到 master 时自动打包上传（asset ID `49532662`） | 与正式 release 区分 |
+| **PJAX** | pushState + Ajax：换页时只替换页面局部 DOM（WaterDrop 主题为 `title/meta/header/#main`），不整页刷新；后果是 `footer.php` 内联脚本只在首次整页加载执行一次 | 决策与理由见 ADR-001；主题脚本纪律见 CLAUDE.md §3 |
 
 ## 缩写
 

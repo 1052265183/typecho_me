@@ -35,7 +35,7 @@
   - 行动：查 GitHub Issues 中「php 7.4 不兼容」类标签的现状；同步到 ADR。
 
 - **T2：补 ADR 历史决策沉淀**
-  - 当前 `planning/02-技术设计/ADR-README.md` 索引为空，待调研阶段按主题补写历史决策（自研 Widget、4 数据库适配、路由表机制等）。
+  - ADR-001（WaterDrop 复制按钮与 PJAX 脚本注入架构，2026-09-27）已产生；仓库历史「先验决策」仍待按主题补写（自研 Widget、4 数据库适配、路由表机制等）。
   - 行动：按 writing-for-agents 模板补 ADR-NNN-xxx。
 
 - **T3：扩展 glossary**
