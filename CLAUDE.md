@@ -37,7 +37,7 @@
 | 改代码 | 本文件对应章节 | 章节描述与代码实际行为一致 |
 | 新技术决策 | `02-技术设计/ADR-NNN-<主题>.md` + `ADR-README.md` 索引表 | 索引表能查到该决策 |
 | 新术语 / 新缩写 | `glossary.md` 术语或缩写表 | 新词有定义、有出处指针 |
-| 新缺口 / 待办 / 开放问题 | `typecho-GAPS.md`（G/T/E 编号）或 `glossary.md` OpenQ（OQ 编号） | 有编号、有行动项 |
+| 新缺口 / 待办 / 开放问题 | `typecho-GAPS.md`（G/T/E 编号）或 `glossary.md` OpenQ（OQ 编号） | 有编号、有行动项，且 `03-任务拆解/工单清单.md` 有同号工单 |
 | 踩坑复现型知识 | `README.md` §七常见坑（一行 + 指针） | 接手者照坑清单可避坑 |
 | 状态类措辞变化 | 全局扫 stale：`planning/README.md` 当前状态、GAPS 对应条目、`README.md` §五 | grep 旧状态词（"尚未产生""索引为空""待补"等）无残留 |
 
@@ -58,7 +58,7 @@
 | `.claude/planning/01-需求分析/` | PRD / UE / 协议接口梳理 | 理解需求/协议时 |
 | `.claude/planning/02-技术设计/ADR-README.md` | ADR 索引 | 查技术决策来源 |
 | `.claude/planning/02-技术设计/架构图.md` | 模块关系图 | 看整体架构 |
-| `.claude/planning/03-任务拆解/` | P0/P1/P2 工单 + 依赖图 | 拆任务/排期 |
+| `.claude/planning/03-任务拆解/工单清单.md` | G/T/E/OQ 同号工单：状态总览 + 验收标准 + 依赖（P0~P2 分级） | 查「还有什么没做完」/ 开工单 / 改任务状态 |
 | `.claude/planning/04-开发计划/` | 版本开发计划（路线图） | 规划版本 |
 | `.claude/planning/05-参考资料/` | 外部文档链接 + 本地参考实现索引 | 找参考实现 |
 | `.claude/plans/` | 临时执行计划（compile-xxx.md 等） | 当前会话在做的活 |
@@ -91,8 +91,9 @@
 
 ## 0.4 当前已知缺口（强制）
 
-- 动代码前必须先对 `.claude/docs/typecho-GAPS.md`；
-- 当前 GAPS 文档已建但为初始模板状态，待第一轮调研后补充具体缺口（详见 `typecho-GAPS.md`）。
+- 动代码前必须先对 `.claude/docs/typecho-GAPS.md`（背景与理由）与 `.claude/planning/03-任务拆解/工单清单.md`（状态、验收标准、依赖）；
+- 已知缺口分三类：**代码缺口** G1~G5（影响正确性）、**待办** T1~T5、**外部依赖** E1~E4；三类编号与工单清单一一对应；
+- 唯一未结的开放问题是 **OQ-005**（`skip-grant-tables` 不落盘），跟踪见工单清单同号条目。
 
 ## 0.5 快速调试（冷启动 → 验证 → 常见故障）
 
@@ -128,7 +129,8 @@ wsl -d Android -- bash -c \
 curl -s -o /dev/null -w "%{http_code}" http://localhost:8000/
 # → 200 = 前台正常
 
-wsl -d Android -- php -r "\$p=new PDO('mysql:host=127.0.0.1;port=13307;dbname=jbxfamr4fjr4ahaz;charset=utf8mb4','cGnMYsk8eccP6iHr','eLk5ycRJrYebL5XF');echo \$p->getAttribute(PDO::ATTR_SERVER_VERSION);"
+# 验证数据库连通（凭据现取现用，详见 §0.7）
+wsl -d Android -- php /mnt/e/deepseek_work/typecho/.claude/scripts/_db_check.php
 # → 8.0.39 = 数据库连通
 ```
 
@@ -141,10 +143,9 @@ wsl -d Android -- php -r "\$p=new PDO('mysql:host=127.0.0.1;port=13307;dbname=jb
 | 安装向导 | http://localhost:8000/install.php （已安装 → 302 到 `/`） |
 | MySQL | 127.0.0.1:13307 |
 | PHP Server 日志 | WSL 内 `/tmp/php-server.log` |
-| MySQL root 密码 | **不可用**——datadir 还原自 `mysql_WLzr` 备份，容器 env 的 `MYSQL_ROOT_PASSWORD` 只在首次初始化生效，还原后失效 |
-| MySQL 应用用户（Typecho 连接） | `cGnMYsk8eccP6iHr` / `eLk5ycRJrYebL5XF` |
-| MySQL 数据库名 | `jbxfamr4fjr4ahaz` |
-| Typecho 管理员 | `huxu` / **密码未知**（库中哈希非 .env 旧值；重置见下方「管理员密码重置」） |
+| 数据库凭据 | **不记明文**——读项目根 `config.inc.php` 的 `db_user` / `db_password` / `db_name`，见 §0.7 |
+| MySQL root 口令 | **不可用**——datadir 还原自 `mysql_WLzr` 备份，容器 env 的 `MYSQL_ROOT_PASSWORD` 只在首次初始化生效，还原后失效 |
+| Typecho 管理员 | `huxu` / **密码不可反解**（库中仅 phpass 哈希；重置见下方「管理员密码重置」） |
 | config.inc.php | 位于项目根目录，不进 git，由 install.php 自动生成 |
 
 ### 常见故障速查
@@ -153,26 +154,91 @@ wsl -d Android -- php -r "\$p=new PDO('mysql:host=127.0.0.1;port=13307;dbname=jb
 |---|---|---|
 | `localhost:8000` 超时 | PHP Server 未启动或 WSL 未运行 | `wsl -l -v` 确认 Running；重跑 Step 3 |
 | MySQL 连接被拒 | 容器未运行 | `wsl -d Android -- docker start mysql_test-mysql_test-1` |
-| `Access denied for user 'cGnMYsk8eccP6iHr'` | 密码错误或容器未运行 | 确认密码 `eLk5ycRJrYebL5XF`；确认容器运行 |
+| `Access denied for user ...` | 密码错误或容器未运行 | 用 `config.inc.php` 的 `db_user` / `db_password` 核对（§0.7）；确认容器运行 |
 | install.php 不进向导 | `typecho_options.installed=1` | 见 DEVELOPER_RULES 重装步骤 |
 | agent-browser 表单不提交 | jQuery AJAX 兼容问题 | 用 `curl -X POST` 代替浏览器提交 |
 
 ### 管理员密码重置
 
-Typecho 管理员密码是 phpass 哈希（`$P$` 开头）存于 `typecho_users`，**不经 MySQL**，所以不需要 root 权限。用项目自带的 `Utils\PasswordHash` 重算哈希后 UPDATE 即可：
+Typecho 管理员密码是 phpass 哈希（`$P$` 开头）存于 `typecho_users`，**不经 MySQL**，所以不需要 root 权限。写操作是写库，用 `.claude/scripts/_mysql_query.py` 的只读护栏会被拦，需直接执行；凭据现取现用（见 §0.7）：
 
 ```bash
 # 1. 生成新哈希（把 newpass 换成你要设的密码）
 wsl -d Android -- php -r 'require "/mnt/e/deepseek_work/typecho/var/Utils/PasswordHash.php";
   $h = new \Utils\PasswordHash(8, true); echo $h->hashPassword("newpass");'
 
-# 2. 写回数据库（应用用户即可，无需 root）
-wsl -d Android -- docker exec -e MYSQL_PWD=eLk5ycRJrYebL5XF mysql_test-mysql_test-1 \
-  mysql -ucGnMYsk8eccP6iHr -h127.0.0.1 jbxfamr4fjr4ahaz \
-  -e "UPDATE typecho_users SET password='<上一步的哈希>' WHERE name='huxu';"
+# 2. 写回数据库（应用用户即可，无需 root）。先从 config.inc.php 解析出凭据，
+#    再用容器内 mysql 客户端执行 UPDATE，避免命令行出现明文口令
+wsl -d Android -- php /mnt/e/deepseek_work/typecho/.claude/scripts/_db_check.php
+#   ↑ 先确认能连库；实际 UPDATE 用 _mysql_query.py 去掉只读护栏的版本执行
 ```
 
-> ⚠️ **MySQL 账号密码无法自助重置**：应用用户 `cGnMYsk8eccP6iHr` 仅有 `jbxfamr4fjr4ahaz` 库权限，读不了 `mysql.user`；root 密码因 datadir 还原而未知。若必须改 MySQL 账号密码，需走 `skip-grant-tables` 流程，且本次实测该模式下 `UPDATE` / `ALTER USER` 均不落盘（哈希未变），需先解决该问题——见 `.claude/planning/glossary.md` OQ-005。
+> ⚠️ **MySQL root 口令无法自助获取**：应用用户仅有单库权限，读不了 `mysql.user`；root 口令因 datadir 还原而不可知。若必须改 MySQL 账号口令，需走 `skip-grant-tables` 流程，且实测该模式下 `UPDATE` / `ALTER USER` 均不落盘（哈希未变），需先解决该问题——见 `.claude/planning/glossary.md` OQ-005。
+
+## 0.6 发布正式环境（远程写操作）
+
+> 触发词：发布、部署、上线、同步到正式环境、把本项目代码更新过去。
+> 与 §0.5 的分工：§0.5 管**本地开发**，本节管**正式环境**。本节只写动手前必须知道、且从代码库查不到的环境事实；单次差异结论不写进本节（会过期），按 §0.6.3 现场重算。
+
+### 0.6.1 硬约束（违反即事故）
+
+- **每次同步前必须 grilling 决策并记录 ADR**（强制）。同步是远程写操作，范围与回滚方式每次都可能不同；先 grill 定清「改什么 / 为什么 / 如何回滚」，落 `02-技术设计/ADR-NNN-<主题>.md` 并登记 `ADR-README.md` 索引，再动手。已落地实例：ADR-002（正式环境同步 WaterDrop 与复制按钮兜底修复）。
+- **写入通道只有宝塔面板 Bash**。服务器 SSH 未运行（root 配置为"仅密钥登录"但未配置任何密钥），`scp` / `rsync` 均不可用。传文件走面板 Bash + base64 分块。
+- **代码在宿主机 bind mount 里，不在镜像里**。容器内 `/var/www/html` 是空的，Apache DocumentRoot 指向 `/app`，而 `/app` 挂载自宿主机目录。改宿主机目录即生效、容器重建不丢；`docker cp` 进容器会在重建时蒸发。
+- **覆盖前先冻结快照**。主题快照已于 2026-09-28 建立在 `snapshots/20260928/`（tar.gz + .sha256 + .manifest 三件套），但**每次覆盖都要新建当次快照**——快照只反映生成那一刻的状态，复用旧快照等于没有回滚点。
+- **远程写操作先取得用户明确同意**再执行（本项目写远程前须说明改什么、影响什么、如何回滚）。
+
+### 0.6.2 正式环境拓扑
+
+| 项 | 值 |
+|---|---|
+| 容器 | `typecho_agbf-typecho_AGbF-1`（compose 项目 `typecho_agbf`） |
+| 镜像 | `joyqi/typecho:1.2.1-php8.0-apache`（Typecho 1.2.1 + PHP 8.0 + Apache 2.4） |
+| 宿主机代码目录 | `/www/dk_project/dk_app/typecho/typecho_AGbF/data` → 容器 `/app` |
+| 宿主机工程目录 | `/www/dk_project/dk_app/typecho/typecho_AGbF/`（含 `data/` `c_plugins/` `snapshots/` `.env` `docker-compose.yml`） |
+| 对外端口 | `22380` |
+| 数据库 | 容器 `mysql_Ni7e`，库 `Jbxfamr4fJr4AhAZ`（**与本地库 `jbxfamr4fjr4ahaz` 同名不同库**，别搞混） |
+| 快照目录 | `…/typecho_AGbF/snapshots/<yyyymmdd>/`，沿用「tar.gz + .sha256 + .manifest」三件套 |
+| 生效主题 | WaterDrop（`data/usr/themes/WaterDrop/`，带独立 `.git`） |
+
+> **IP 不写死**：服务器公网 / 内网地址用宝塔 `ServerIP` 现场查（历史上内网曾为 `172.29.51.111`，本机在该网段内可直连对外端口做部署后验证；换机器或换网络后此结论可能失效，以 `ServerIP` 为准）。
+
+### 0.6.3 发布流程
+
+1. **只读比对，不假设"本地的一定新"**。逐文件哈希对比，生产环境的 `data/` 目录可能有本地没有的手工改动。反方向（服务器领先于本项目）同样要能发现。
+   - 本地 Windows 侧**先做 CRLF→LF 归一化**再算哈希，否则同一内容因行尾符不同全盘误判为差异；
+   - 二进制文件（png / woff / ttf / jar）**跳过归一化**——对其做字节替换会破坏内容，同样产生假差异。
+2. **冻结快照**：把待覆盖目录打包进 `snapshots/<日期>/`，附 `.sha256`，回滚路径先确认可用再动文件。
+3. **传输**：面板 Bash 写临时文件，base64 传输，落地后 `base64 -d` 解码；按 LF 落盘，与远程现状保持一致。
+   - **优先单条整传，不要手工分块**。本次手工把一个 4100 字符的 base64 拆成三块用 `>` / `>>` 拼接，块边界把一个单词劈成两半（`ZG9jdW1lbnQu` + `bm9keS5yZW1vdmU`），落盘后文件多出一行、浏览器报 `missing ) after argument list`。
+   - **闸门要卡在"本地原件"上**：只比对"暂存区 vs 目标区"会两边一起错、全部显示 OK。正确做法是解出后**三方比对**——本地原文件字节数 + 行数 + sha256 全部对上才算过。字节数是最快的一道：4111 vs 3073 一眼可辨。
+4. **替换**：保留原属主（`www` / `www-data`）与权限。注意 `cp -p` 保留的是**暂存区文件**的属主（root），不是目标区原有的；复制后需 `chown` / `chmod` 显式还原，否则与目录内其他文件不一致。
+5. **验证**：用宝塔 `ServerIP` 取内网地址，浏览器直连 `http://<内网IP>:22380/` 看真实渲染。主题改动必须浏览器实测——与 §3 主题 PJAX 纪律同理，`php -l` 查不出模板层问题。
+
+### 0.6.4 同步记录（非信源）
+
+> 最近一次同步：**2026-09-28**，已按 ADR-002 完成并经用户实测确认。**下次同步前必须按 §0.6.3 重新比对**，不要拿这份记录直接覆盖。
+
+- 核心库与后台（`var/` `admin/` 根 `index.php` `install.php`）与本项目**完全一致**，无需发布；
+- 已发布 7 个文件：`index.php`（首页三列紧凑网格）、`footer.php`、`post.php`、`static/css/common.css`、`static/js/copy-page.js`，新增 `static/js/clipboard.js`、`static/js/copy-code.js`；
+- 正式环境为 http（非安全上下文），两个复制按钮的 `execCommand` 兜底路径已在真实点击下验证通过；
+- 回滚点：`snapshots/20260928/`（tar.gz + .sha256 + .manifest）。
+
+## 0.7 凭据存放与获取（不写值，只写去哪儿取）
+
+> **本文件不记录任何明文密码**。需要凭据时按下表去对应位置取，取不到再看「取不到怎么办」。
+
+| 凭据 | 去哪儿取 | 备注 |
+|---|---|---|
+| 本地 Typecho 数据库账号/密码/库名 | 项目根 `config.inc.php`（不进 git，由 install.php 生成） | 有 `db_user` / `db_password` / `db_name` 三项；MySQL 应用用户仅有该库权限 |
+| 本地 MySQL 应用用户口令 | 同上 `config.inc.php` 的 `db_password`，或 `env | Select-String "TYPECHO_DB"` 查已设的环境变量 | 也可用 `.claude/scripts/_mysql_query.py`，它只认 `TYPECHO_DB_USER` / `TYPECHO_DB_PASS` 环境变量 |
+| 正式环境数据库凭据 | 宿主机 `…/typecho_AGbF/.env` 的 `MYSQL_*` 变量 | 不在仓库内，需登服务器查 |
+| MySQL root 口令 | **无**——datadir 从 `mysql_WLzr` 备份还原，容器 env 的 `MYSQL_ROOT_PASSWORD` 只在首次初始化生效 | 见 §0.5 管理员密码重置；改 root 口令的阻塞见 glossary OQ-005 |
+| Typecho 管理员账号 | `huxu`（口令不可反解，库中仅 phpass 哈希） | 重置走 §0.5「管理员密码重置」，无需 root |
+
+**取不到怎么办**：不要把口令写进任何文档或脚本。设环境变量后用脚本读，或临时用 `config.inc.php` 现取现用；确实需要新建口令时，用 §0.5 的重置流程生成。
+
+---
 
 ## 1. 架构分层与请求流
 
@@ -222,7 +288,7 @@ wsl -d Android -- docker exec -e MYSQL_PWD=eLk5ycRJrYebL5XF mysql_test-mysql_tes
 ## 6. 安全与合规
 
 - **协议**：GPL 2.0（`LICENSE.txt` + `tools/package.json` 已声明 `GPL-2.0-only`）；二次分发须保留协议与版权声明。
-- **密钥**：不硬编码密钥（数据库口令靠 `config.inc.php`，不进 git）；任何新增密钥配置走 `.claude/docs/typecho-DEVELOPER_RULES.md` 的「环境变量」段。
+- **密钥**：不硬编码密钥、不在文档里写明文口令。数据库口令靠 `config.inc.php`（不进 git）；脚本从 `TYPECHO_DB_USER` / `TYPECHO_DB_PASS` 等环境变量读；需要凭据时按 §0.7 标注的来源现取现用。
 - **入口校验**：`index.php` 第 11 行先尝试 `config.inc.php`，缺失则跳转 `install.php`；新模块切勿绕过此机制。
 - **提交前**：跑完全局安全检查 8 项（硬编码密钥 / 输入验证 / SQL 注入 / XSS / CSRF / 鉴权 / 速率限制 / 错误信息脱敏）。
 

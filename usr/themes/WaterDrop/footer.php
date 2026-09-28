@@ -19,6 +19,8 @@
     </div>
 </footer><!-- end #footer -->
 <script src="<?php $this->options->themeUrl('static/js/pjax.min.js'); ?>"></script>
+<script src="<?php $this->options->themeUrl('static/js/clipboard.js'); ?>"></script>
+<script src="<?php $this->options->themeUrl('static/js/copy-code.js'); ?>"></script>
 <script src="<?php $this->options->themeUrl('static/js/copy-page.js'); ?>"></script>
 <?php
 $googleAd = getGoogleAd();
@@ -69,7 +71,6 @@ if ($this->options->footerJs) {
     document.addEventListener('pjax:complete', (e) => {
         loader.classList.add("hidden");
         body.style.display = "block";
-        injectCopyButtons();
     });
 
     window.addEventListener('click', function(e) {
@@ -107,46 +108,7 @@ if ($this->options->footerJs) {
         document.body.scrollTop = 0;
         document.documentElement.scrollTop = 0;
     });
-
-    /**
-     * 给文章代码块注入"复制到剪贴板"按钮
-     *PJAX 切页后 footer 脚本不会重跑，所以抽成函数：
-     * 整页加载调用一次，pjax:complete 后再调用一次；已注入过的 pre 跳过，防重复
-     */
-    function injectCopyButtons() {
-        const pres = document.querySelectorAll(".markdown-body pre");
-        pres.forEach(pre => {
-            if (pre.querySelector(".copy-code-btn")) {
-                return;
-            }
-            const code = pre.querySelector("code");
-            if (!code) {
-                return;
-            }
-            const copyBtn = document.createElement("span");
-            copyBtn.classList.add("copy-code-btn");
-            copyBtn.title = "复制代码";
-            const icon = document.createElement("i");
-            icon.classList.add("iconfont", "icon-copy", "fs-5");
-            copyBtn.appendChild(icon);
-            pre.appendChild(copyBtn);
-            copyBtn.addEventListener("click", () => {
-                const text = code.innerText;
-                navigator.clipboard.writeText(text).then(() => {
-                    icon.classList.remove("icon-copy");
-                    icon.classList.add("icon-duihao", "text-success");
-                    setTimeout(() => {
-                        icon.classList.remove("icon-duhao", "text-success");
-                        icon.classList.remove("icon-duihao", "text-success");
-                        icon.classList.add("icon-copy");
-                    }, 2000);
-                });
-            });
-        });
-    }
-
-    injectCopyButtons();
-    </script>
+</script>
 </body>
 
 </html>

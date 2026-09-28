@@ -24,16 +24,17 @@
 - **Release 自动打包**：发布 release 时构建并触发语言仓库构建
 
 ### P1（持续改进）
-- 插件/主题兼容新 PHP 8.x 版本（CI 矩阵仅做语法检查，无运行时测试）
-- docs.typecho.org 文档站与源码同步
+- 插件/主题兼容新 PHP 8.x 版本（CI 矩阵仅做语法检查，无运行时测试）→ 工单 G1
+- docs.typecho.org 文档站与源码同步 → 外部依赖 E1
 
 ### P2（生态）
 - 第三方插件/主题市场（不在本仓库范围）
 
 ### 外部依赖
-- docs.typecho.org（官方文档站）
-- typecho/languages（i18n 语言仓库，由 `tools/Makefile langs` 拉取）
-- GitHub Actions（CI/CD）
+详见 `.claude/docs/typecho-GAPS.md` §外部依赖阻塞（E1~E4），含触发条件与检查动作。
+
+### 进度跟踪
+工单编号、状态、验收标准见 `.claude/planning/03-任务拆解/工单清单.md`。
 
 ## 三、架构分层
 
@@ -92,7 +93,7 @@ HTTP → admin/<page>.php
 
 ## 五、关键决策索引（ADR-xxx）
 
-当前 ADR 索引见 `.claude/planning/02-技术设计/ADR-README.md`。已有 ADR-001（WaterDrop 复制按钮与 PJAX 脚本注入架构，2026-09-27）；仓库历史先验决策（自研 Widget、4 数据库适配等）待按 writing-for-agents 逐步沉淀（GAPS T2）。
+当前 ADR 索引见 `.claude/planning/02-技术设计/ADR-README.md`。已有 ADR-001（WaterDrop 复制按钮与 PJAX 脚本注入架构，2026-09-27）；仓库历史先验决策（自研 Widget、4 数据库适配等）待按 writing-for-agents 逐步沉淀（工单 T2，见 `.claude/planning/03-任务拆解/工单清单.md`）。
 
 ## 六、代码入口（接手先看）
 
@@ -129,6 +130,9 @@ HTTP → admin/<page>.php
 - **Makefile 用 tar.gz 打包**：`tools/Makefile` 的 `package` target 输出 `build.tar.gz`，**不是** `.zip`；CI 的 zip 是 `.github/workflows/Typecho-release-Ci.yml` 用 `zip -q -r typecho.zip *` 打的。
 - **本地开发环境在 WSL 里跑**：PHP 8.2 + Docker 装在 WSL "Android"（实际 Ubuntu 20.04）发行版中，MySQL 容器 `mysql_test` 映射端口 `13307`。快速启动 / 凭据 / 排障见 `CLAUDE.md` §0.5；完整还原流程见 `.claude/docs/typecho-DEVELOPER_RULES.md` §本地开发环境。
 - **datadir 还原后 root 密码失效**：容器 env 的 `MYSQL_ROOT_PASSWORD` 只在镜像首次初始化时写入，替换 datadir 后失效；此时唯一可用凭据是备份中已存在的应用用户，改 MySQL 账号密码需先解决 `skip-grant-tables` 不落盘的问题（`glossary.md` OQ-005）。
+- **跨环境比对文件哈希**：Windows 本地是 CRLF、Linux 是 LF，直接比 sha256 会把同一内容全盘误判为差异；本地侧先做 CRLF→LF 归一化，而二进制文件（png/woff/ttf）**跳过**归一化——对其做字节替换同样产生假差异（本次即因此误报 7 张图片不同）。见 `CLAUDE.md` §0.6.3。
+- **base64 分块传输会把单词劈开**：手工把 base64 拆成多块用 `>`/`>>` 拼接，块边界可能落在单词中间，落盘后文件多一行、浏览器报语法错误，而「暂存区 vs 目标区」哈希比对**两边一起错、全部显示 OK**。闸门要卡本地原件：字节数 + 行数 + sha256 三方对上才算过。见 `CLAUDE.md` §0.6.3。
+- **`cp -p` 保留的是暂存区属主**：从 `/tmp` 复制到线上目录时，`-p` 保留的是**暂存文件**的属主（root），不是目标区原有的 `www:www`。复制后需 `chown` / `chmod` 显式还原。见 `CLAUDE.md` §0.6.3。
 
 ## 八、文档地图（按场景 pointer 表）
 
@@ -136,6 +140,7 @@ HTTP → admin/<page>.php
 |---|---|
 | 第一次接触项目 | 本 README + `CLAUDE.md` |
 | 启动本地开发环境 | `.claude/docs/typecho-DEVELOPER_RULES.md` §本地开发环境 |
+| 发布 / 部署到正式环境 | `CLAUDE.md` §0.6（硬约束 + 正式环境拓扑 + 5 步发布流程） |
 | 改核心库/框架 | `CLAUDE.md §1 架构分层` + `var/Typecho/Widget.php` + `Router.php` |
 | 改后台页面 | `CLAUDE.md §1` + `admin/` 目录 + 对应 Widget 源码 |
 | 改数据库适配 | `var/Typecho/Db/Adapter/` + `CLAUDE.md §0.4` 已知缺口 |
@@ -144,4 +149,5 @@ HTTP → admin/<page>.php
 | 改构建/CI | `.claude/docs/typecho-DEVELOPER_RULES.md` + `.github/workflows/` |
 | 排查 bug | `.claude/bugs/<bugId>/bug_detail.txt`（新建按规则第 3 步目录命名） |
 | 调研未决问题 | `.claude/planning/glossary.md` OpenQ 区 + `.claude/docs/typecho-GAPS.md` |
+| 跟踪任务进度 / 看还有什么没做完 | `.claude/planning/03-任务拆解/工单清单.md`（状态总览表 + 验收标准） |
 | 沉淀新经验 | 按「生成经验文档」规则落 `.claude/docs/typecho-经验-xxx.md` |

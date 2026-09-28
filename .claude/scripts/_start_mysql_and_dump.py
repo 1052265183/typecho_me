@@ -1,7 +1,13 @@
 #!/usr/bin/env python3
 """启动 mysql_ni7e 容器 + 探表 + mysqldump"""
-import subprocess, sys
+import subprocess, sys, os
 sys.stdout.reconfigure(encoding='utf-8', errors='replace')
+
+# 凭据从环境变量读，不落盘（见 CLAUDE.md §0.7）
+DB_USER = os.environ.get('TYPECHO_DB_USER', '')
+DB_PASS = os.environ.get('TYPECHO_DB_PASS', '')
+if not DB_USER or not DB_PASS:
+    sys.exit('请先设置 TYPECHO_DB_USER 与 TYPECHO_DB_PASS 环境变量')
 
 def wsl(cmd, timeout=60):
     return subprocess.run(
@@ -26,8 +32,8 @@ print()
 print('===== 库列表 + 表列表 + 行数 =====')
 r = wsl(f'''
 docker exec {C} sh -c "
-DB_USER=cGnMYsk8eccP6iHr
-DB_PASS=eLk5ycRJrYebL5XF
+DB_USER={DB_USER}
+DB_PASS={DB_PASS}
 DB_NAME=Jbxfamr4fJr4AhAZ
 echo '--- 库列表 ---'
 mysql -u\\$DB_USER -p\\$DB_PASS -e 'SHOW DATABASES;' 2>&1
@@ -46,9 +52,9 @@ print()
 print('===== 表 schema（部分） =====')
 r = wsl(f'''
 docker exec {C} sh -c "
-mysql -ucGnMYsk8eccP6iHr -peLk5ycRJrYebL5XF Jbxfamr4fJr4AhAZ -e 'SHOW CREATE TABLE typecho_contents\\G' 2>&1 | head -30
+mysql -u{DB_USER} -p{DB_PASS} Jbxfamr4fJr4AhAZ -e 'SHOW CREATE TABLE typecho_contents\\G' 2>&1 | head -30
 echo '---'
-mysql -ucGnMYsk8eccP6iHr -peLk5ycRJrYebL5XF Jbxfamr4fJr4AhAZ -e 'SHOW CREATE TABLE typecho_options\\G' 2>&1 | head -30
+mysql -u{DB_USER} -p{DB_PASS} Jbxfamr4fJr4AhAZ -e 'SHOW CREATE TABLE typecho_options\\G' 2>&1 | head -30
 " 2>&1
 ''')
 print(r.stdout)

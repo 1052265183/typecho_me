@@ -151,28 +151,30 @@ wsl -d Android -- bash -c \
 
 ### 凭据现状（还原后实测）
 
-| 用途 | 用户名 | 密码 | 权限 |
-|---|---|---|---|
-| MySQL 应用用户（Typecho 连接） | `cGnMYsk8eccP6iHr` | `eLk5ycRJrYebL5XF` | 仅 `jbxfamr4fjr4ahaz` 库 |
-| MySQL root | — | **未知**（见下方说明） | 不可用 |
-| Typecho 管理员 | `huxu` | **未知**（可用 `CLAUDE.md` §0.5 重置） | — |
+> **本文件不记录明文口令**，只写「去哪儿取」。统一口径见 `CLAUDE.md` §0.7。
 
-**数据库**：`jbxfamr4fjr4ahaz`（8 张表 = 7 张 `typecho_*` + `typecho_wx_share`）
+| 用途 | 去哪儿取 | 权限 |
+|---|---|---|
+| MySQL 应用用户（Typecho 连接） | 项目根 `config.inc.php` 的 `user` / `password` / `database` 三项 | 仅单库（本地库名见 §本地开发环境） |
+| MySQL root | **无**——见下方说明 | 不可用 |
+| Typecho 管理员 | 账号 `huxu`；口令**不可反解**（库中仅 phpass 哈希） | 按 `CLAUDE.md` §0.5 重置 |
+
+**数据库**：本地库名见 §本地开发环境（8 张表 = 7 张 `typecho_*` + `typecho_wx_share`）
 **站点**：Thron的博客 / Typecho 1.3.0 / 主题 WaterDrop / 321 篇内容 / `installed=1`
 
-> ⚠️ **root 密码为何不可用**：datadir 是从 `mysql_WLzr` 容器整体还原的，其 `mysql.user` 表里 root 的哈希来自那套环境。容器 env 里的 `MYSQL_ROOT_PASSWORD=2SsNbn3EwPdMKdDk` **只在镜像首次初始化 datadir 时生效**，datadir 被整体替换后该变量失效，实测用 env 密码登录报 `Access denied`。
+> ⚠️ **root 口令为何不可用**：datadir 是从 `mysql_WLzr` 容器整体还原的，其 `mysql.user` 表里 root 的哈希来自那套环境。容器 env 里的 `MYSQL_ROOT_PASSWORD` **只在镜像首次初始化 datadir 时生效**，datadir 被整体替换后该变量失效，实测用 env 密码登录报 `Access denied`。
 
 ### config.inc.php 关键字段
 
 ```php
 $db = new \Typecho\Db('Pdo_Mysql', 'typecho_');
 $db->addServer(array (
-  'host'      => '127.0.0.1',   // 备份里是 mysql_Ni7e（容器服务名），本地要改成 127.0.0.1
-  'port'      => 13307,         // 备份里是 3306（容器内网），本地映射端口
-  'user'      => 'cGnMYsk8eccP6iHr',
-  'password'  => 'eLk5ycRJrYebL5XF',
+  'host'      => '127.0.0.1',   // 备份里是容器服务名，本地要改成 127.0.0.1
+  'port'      => 13307,         // 备份里是容器内网 3306，本地用映射端口
+  'user'      => '<应用用户名，取自线上 .env 的 MYSQL_USER>',
+  'password'  => '<口令，取自线上 .env 的 MYSQL_PASSWORD>',
   'charset'   => 'utf8mb4',
-  'database'  => 'jbxfamr4fjr4ahaz',  // 备份里是 Jbxfamr4fJr4AhAZ，需小写（lower_case_table_names=1）
+  'database'  => '<库名，取自线上 .env 的 MYSQL_DATABASE，需与 lower_case_table_names 一致>',
   'engine'    => 'InnoDB',
   'sslCa'     => NULL,
   'sslVerify' => false,         // 备份里是 true，本地无 SSL 证书
@@ -223,12 +225,12 @@ wsl -d Android -- docker restart mysql_test-mysql_test-1
 
 **Step 4 — 改 config.inc.php + 库内 siteUrl**
 
-改 host/port/database/sslVerify（见上表），并把库里的旧穿透域名改成本地：
+改 host/port/database/sslVerify（见上表），并把库里的旧穿透域名改成本地（凭据现取现用，见 `CLAUDE.md` §0.7）：
 
 ```bash
-wsl -d Android -- docker exec -e MYSQL_PWD=eLk5ycRJrYebL5XF mysql_test-mysql_test-1 \
-  mysql -ucGnMYsk8eccP6iHr -h127.0.0.1 jbxfamr4fjr4ahaz \
-  -e "UPDATE typecho_options SET value='http://localhost:8000' WHERE name='siteUrl';"
+wsl -d Android -- php -r '$c=require "/mnt/e/deepseek_work/typecho/config.inc.php";
+  $p=new PDO("mysql:host=127.0.0.1;port=13307;dbname={$c["db_name"]}",$c["db_user"],$c["db_password"]);
+  $p->exec("UPDATE typecho_options SET value=\"http://localhost:8000\" WHERE name=\"siteUrl\"");'
 ```
 
 不改 siteUrl 的后果：页面 CSS/JS 全部指向旧域名 `http://xkj88.e3.luyouxia.net:29026`，前台白屏。
@@ -238,9 +240,9 @@ wsl -d Android -- docker exec -e MYSQL_PWD=eLk5ycRJrYebL5XF mysql_test-mysql_tes
 ```bash
 # 前台 200 + 标题正确 + 数据库连通
 curl -s http://localhost:8000/ | grep -o '<title>[^<]*</title>'
-wsl -d Android -- docker exec -e MYSQL_PWD=eLk5ycRJrYebL5XF mysql_test-mysql_test-1 \
-  mysql -ucGnMYsk8eccP6iHr -h127.0.0.1 -N \
-  -e "SELECT COUNT(*) FROM typecho_contents;" jbxfamr4fjr4ahaz
+wsl -d Android -- php -r '$c=require "/mnt/e/deepseek_work/typecho/config.inc.php";
+  $p=new PDO("mysql:host=127.0.0.1;port=13307;dbname={$c["db_name"]}",$c["db_user"],$c["db_password"]);
+  echo $p->query("SELECT COUNT(*) FROM typecho_contents")->fetchColumn();'
 ```
 
 ### 已知坑
@@ -275,6 +277,6 @@ wsl -d Android -- docker exec -e MYSQL_PWD=eLk5ycRJrYebL5XF mysql_test-mysql_tes
 ## 测试
 
 - **当前状态**：**仅 `php -l` 语法检查**，无单元测试（详见 `typecho-GAPS.md` §代码缺口）。
-- **PHPUnit 引入状态**：未引入；OQ-002 待决策。
+- **PHPUnit 引入状态**：未引入；选型待决策（工单 G1）。
 - **本地快速验证**：`cd tools && make test`（语法检查）或 `for i in $(find . -name '*.php'); do php -l $i; done | grep -v 'No syntax errors detected'`。
 - **集成测试**：手动在本地环境装一个 Typecho，跑 `install.php` 流程，验证 4 种数据库适配。

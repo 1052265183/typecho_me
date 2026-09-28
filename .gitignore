@@ -38,3 +38,4 @@ usr/themes/*
 !usr/themes/WaterDrop
 node_modules/
 tools/tmp/
+.claude/tmp/

@@ -1,7 +1,13 @@
 #!/usr/bin/env python3
 """摸底源 MySQL：找正确容器名 + 探表结构 + 记录大小"""
-import subprocess, sys
+import subprocess, sys, os
 sys.stdout.reconfigure(encoding='utf-8', errors='replace')
+
+# 凭据从环境变量读，不落盘（见 CLAUDE.md §0.7）
+DB_USER = os.environ.get('TYPECHO_DB_USER', '')
+DB_PASS = os.environ.get('TYPECHO_DB_PASS', '')
+if not DB_USER or not DB_PASS:
+    sys.exit('请先设置 TYPECHO_DB_USER 与 TYPECHO_DB_PASS 环境变量')
 
 def run(cmd, timeout=30):
     return subprocess.run(
@@ -40,20 +46,20 @@ print(r.stdout)
 # 5. 从 typecho 容器里直接连 MySQL 验证（避免外部网络）
 print()
 print('===== 从 typecho 容器里查 MySQL 表 =====')
-r = wsl('''
+r = wsl(f'''
 docker exec typecho_agbf-typecho_AGbF-1 sh -c "
 DB_HOST=mysql_Ni7e
-DB_USER=cGnMYsk8eccP6iHr
-DB_PASS=eLk5ycRJrYebL5XF
+DB_USER={DB_USER}
+DB_PASS={DB_PASS}
 DB_NAME=Jbxfamr4fJr4AhAZ
 echo '--- 库列表 ---'
-mysql -h \$DB_HOST -u\$DB_USER -p\$DB_PASS -e 'SHOW DATABASES;' 2>&1
+mysql -h \\$DB_HOST -u\\$DB_USER -p\\$DB_PASS -e 'SHOW DATABASES;' 2>&1
 echo '--- 当前库的表列表 ---'
-mysql -h \$DB_HOST -u\$DB_USER -p\$DB_PASS \$DB_NAME -e 'SHOW TABLES;' 2>&1
+mysql -h \\$DB_HOST -u\\$DB_USER -p\\$DB_PASS \\$DB_NAME -e 'SHOW TABLES;' 2>&1
 echo '--- 每张表的行数 ---'
-for t in \$(mysql -h \$DB_HOST -u\$DB_USER -p\$DB_PASS -N -e \"SHOW TABLES\" \$DB_NAME 2>/dev/null); do
-  cnt=\$(mysql -h \$DB_HOST -u\$DB_USER -p\$DB_PASS -N -e \"SELECT COUNT(*) FROM \$t\" \$DB_NAME 2>/dev/null)
-  echo \"  \$t: \$cnt 行\"
+for t in \\$(mysql -h \\$DB_HOST -u\\$DB_USER -p\\$DB_PASS -N -e \\"SHOW TABLES\\" \\$DB_NAME 2>/dev/null); do
+  cnt=\\$(mysql -h \\$DB_HOST -u\\$DB_USER -p\\$DB_PASS -N -e \\"SELECT COUNT(*) FROM \\$t\\" \\$DB_NAME 2>/dev/null)
+  echo \\"  \\$t: \\$cnt 行\\"
 done
 " 2>&1
 ''')

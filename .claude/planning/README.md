@@ -19,5 +19,8 @@
 
 ## 当前状态
 
-- 五个子目录骨架已建；`02-技术设计/` 已有 `架构图.md`、`ADR-README.md` 索引与 ADR-001（2026-09-27）；`glossary.md` 已收录术语与 OQ-001~005。
-- 后续调研与决策继续按 writing-for-agents 沉淀；详见 `.claude/planning/glossary.md` 与 `.claude/planning/02-技术设计/ADR-README.md`。
+- 五个子目录骨架已建；`02-技术设计/` 已有 `架构图.md`、`ADR-README.md` 索引与 ADR-001（2026-09-27）。
+- `03-任务拆解/工单清单.md` 已建立：GAPS 的 G1~G4 / T1~T5 与 OpenQ OQ-005 共 10 条工单，含状态、验收标准、依赖；**任务进度只在这里改**，GAPS 管背景、ADR 管决策理由，三处不重复展开。
+- `glossary.md` 已收录术语与 OpenQ；OpenQ 区当前只剩 OQ-005（其余已由 GAPS 条目承载）。
+- `01-需求分析/`、`04-开发计划/`、`05-参考资料/` 仍为空目录，待有实际需求/排期时再填。
+- 后续调研与决策继续按 writing-for-agents 沉淀；详见 `glossary.md` 与 `02-技术设计/ADR-README.md`。

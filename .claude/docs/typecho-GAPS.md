@@ -1,6 +1,7 @@
 # Typecho 已知缺口（GAPS）
 
 > 动代码前先对这份文档。本文件按三段组织：代码缺口（影响代码正确性）、待办（非阻塞改进）、外部依赖阻塞（需等待外部动作）。
+> **本文件只管背景与理由**；每条的编号、状态、验收标准、依赖在 `.claude/planning/03-任务拆解/工单清单.md` 同号条目查，改状态去那里改。
 
 ## 代码缺口
 
@@ -9,22 +10,27 @@
 - **G1：CI 仅 `php -l` 语法检查，无运行时测试**
   - 现象：`.github/workflows/Typecho-dev-Ci.yml` 第 29 行仅跑 `find . -type f -name '*.php' | xargs -0 -n1 -P4 php -l -n`，不保证 4 种 PHP 版本（7.4/8.0/8.1/8.2）下代码运行正确。
   - 影响：依赖 PHP 8.x 新特性（命名参数、match 表达式、枚举）改动不会被 CI 拦截。
-  - 后续：OQ-002 待决策是否引入 PHPUnit；短期手动测试 4 个 PHP 版本。
+  - 后续：待决策是否引入 PHPUnit（工单 G1，结论落 ADR-002）；短期手动测试 4 个 PHP 版本。
 
 - **G2：`var/Typecho/Widget.php` 单文件 551 行**
   - 现象：核心基类 `Widget` 含对象池管理 + 魔术属性 + 配置获取 + 路由联动，单一职责偏大。
   - 影响：新人接手门槛、单元测试难度、修改牵连面广。
-  - 后续：OQ-004 待讨论是否拆分为 `WidgetPool` / `WidgetProperties` / `WidgetBase` 等。
+  - 后续：待讨论是否拆分为 `WidgetPool` / `WidgetProperties` / `WidgetBase` 等（工单 G2，方案落 ADR-005）。
 
 - **G3：`tools/Dockerfile` 已陈旧**
   - 现象：基于 Ubuntu 16.04 + 自编译 PHP 7.0.14 + nginx 1.10.2，2018 年后未更新；官方 README 未推荐使用。
   - 影响：按 Dockerfile 部署将暴露已知安全漏洞（Ubuntu 16.04 EOL）。
-  - 后续：OQ-003 待决策是重写还是从仓库移除。
+  - 后续：待决策是重写还是从仓库移除（工单 G3，结论落 ADR-004）。
 
 - **G4：4 种数据库适配差异未自动化覆盖**
   - 现象：`var/Typecho/Db/Adapter/` 含 `Mysql` / `Mysqli` / `Pgsql` / `SQLite` + `Pdo` 子类，新增 SQL 需人工测 4 库。
   - 影响：DB 相关 PR 容易漏测某库（如 SQLite 对 CTE 支持有限）。
   - 后续：依赖 G1 解决（PHPUnit 引入后加 DB 集成测试）。
+
+- **G5：代码块复制按钮无 `execCommand` 兜底（ADR 决策已定但实现未落地）** —— **已修复（2026-09-28，工单 G5 已完成）**
+  - 原现象：`usr/themes/WaterDrop/footer.php` 的 `injectCopyButtons()` 只调 `navigator.clipboard.writeText(text).then(...)`，既无 `.catch()` 降级也无 `execCommand` 兜底；而 `ADR-001` 决策 4 明确要求「API 优先 + execCommand 兜底」、备选 C 明确否决「仅用 navigator.clipboard」。该逻辑仍留在 `footer.php` 内联，与 ADR-001 备选 A（否决「全部留内联」）冲突。
+  - 叠加问题：`copy-page.js` 的 `fallbackCopy()` 只挂在 `.catch()` 上，而 ADR-001 背景 3 记录 http 下 Promise 可能**静默挂起**（既不 resolve 也不 reject），此时 `.catch()` 永不触发，整页复制按钮同样无反馈。
+  - 修法与验证：新增 `static/js/clipboard.js`（三段式：API → 800ms 超时 → `execCommand`）与 `static/js/copy-code.js`（代码块逻辑外置 + 事件委托 + PJAX 重跑），两套复制逻辑共用同一份兜底；正式环境 http 下已用真实点击验证两个按钮均有反馈。方案见 `02-技术设计/ADR-002`，验收记录见 `03-任务拆解/工单清单.md` G5。
 
 ## 待办
 

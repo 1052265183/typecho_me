@@ -3,7 +3,8 @@
  * 事件委托绑在 document 上：按钮 HTML 在 #main 内（PJAX 换页区域），
  * 委托保证整页/PJAX 切页后新按钮都能触发。
  * 复制目标：当前 .markdown-body 的 innerText（代码块保留缩进换行）。
- * 兼容：优先 Clipboard API（https/localhost 安全上下文），http 下降级 execCommand。
+ * 兼容：剪贴板写入统一委托 clipboard.js（API + 超时 + execCommand 三段式兜底），
+ *       理由与降级细节见该文件注释与 ADR-002 决策 2。
  * 视觉反馈：按钮变绿对勾 2s + 正文短暂高亮 flash。
  */
 (function () {
@@ -12,18 +13,11 @@
 
   var state = { copying: false };
 
-  function fallbackCopy(text, done) {
-    var ta = document.createElement("textarea");
-    ta.value = text;
-    ta.style.position = "fixed";
-    ta.style.left = "-9999px";
-    document.body.appendChild(ta);
-    ta.select();
-    try {
-      document.execCommand("copy");
-    } catch (err) {}
-    document.body.removeChild(ta);
-    done();
+  function writeClipboard(text) {
+    if (window.__wdWriteClipboard) {
+      return window.__wdWriteClipboard(text);
+    }
+    return Promise.resolve(false);
   }
 
   function onCopied(btn, md, icon) {
@@ -63,25 +57,11 @@
     var text = md.innerText || md.textContent || "";
     var icon = btn.querySelector("i");
 
-    if (navigator.clipboard && window.isSecureContext) {
-      navigator.clipboard.writeText(text).then(function () {
-        onCopied(btn, md, icon);
-        state.copying = false;
-        btn.dataset.copied = "";
-      }).catch(function () {
-        fallbackCopy(text, function () {
-          onCopied(btn, md, icon);
-          state.copying = false;
-          btn.dataset.copied = "";
-        });
-      });
-    } else {
-      fallbackCopy(text, function () {
-        onCopied(btn, md, icon);
-        state.copying = false;
-        btn.dataset.copied = "";
-      });
-    }
+    writeClipboard(text).then(function () {
+      onCopied(btn, md, icon);
+      state.copying = false;
+      btn.dataset.copied = "";
+    });
   }
 
   // 事件委托：点击冒泡到 document，取 .copy-page-btn
