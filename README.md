@@ -105,8 +105,8 @@ HTTP → admin/<page>.php
 | 核心基类 | `var/Typecho/Widget.php` | 551 行，所有 widget 继承 |
 | 路由核心 | `var/Typecho/Router.php` | 191 行，`Router::match()` / `Router::dispatch()` |
 | 数据库抽象 | `var/Typecho/Db/Adapter/` | `Mysql` / `Mysqli` / `Pdo` / `Pgsql` / `SQLite` |
-| 插件示例 | `usr/plugins/HelloWorld/Plugin.php` | 最简单的插件样例 |
-| 主题示例 | `usr/themes/default/index.php` | 内置默认主题入口 |
+| 插件示例 | `usr/plugins/TinyMceForTypecho/Plugin.php` | 仓库内唯一在用的插件 |
+| 主题示例 | `usr/themes/WaterDrop/index.php` | 唯一在用的主题入口 |
 
 ## 七、AI 接手指南
 
@@ -124,7 +124,7 @@ HTTP → admin/<page>.php
 - **对象池**：`Widget::widget()` 用对象池管理实例，**禁止** `unset()` 后立刻期待重置；见 `var/Typecho/Widget.php` 第 26-32 行。
 - **数据库适配**：`Db.php` 通过 `Adapter` 抽象 4 种数据库，新增 SQL 必须 4 库都跑通（`Mysql` / `Pgsql` / `SQLite` + `Pdo` 子类）。
 - **插件钩子**：钩子命名是字符串（如 `index.php` / `begin` / `end`），**注意大小写一致**。
-- **主题函数**：主题 `functions.php` 中常用 `_e()` 国际化 / `Typecho_Widget::widget()` 取组件；改主题前看 `usr/themes/default/functions.php`。
+- **主题函数**：主题 `functions.php` 中常用 `_e()` 国际化 / `Typecho_Widget::widget()` 取组件；改主题前看 `usr/themes/WaterDrop/functions.php`。
 - **主题 PJAX 脚本**：WaterDrop 启用 PJAX，`footer.php` 内联脚本只在整页加载执行一次；注入型功能必须挂 `pjax:complete` 重跑，`</script>` 闭合缺失 `php -l` 查不出、只有浏览器实测能暴露——4 条纪律见 `CLAUDE.md` §3，决策与理由见 ADR-001。
 - **Dockerfile 已陈旧**：Ubuntu 16.04 + PHP 7.0.14，新部署勿用，要用 `tools/Makefile` 出的 tar.gz + 自己装 PHP-FPM/nginx。
 - **Makefile 用 tar.gz 打包**：`tools/Makefile` 的 `package` target 输出 `build.tar.gz`，**不是** `.zip`；CI 的 zip 是 `.github/workflows/Typecho-release-Ci.yml` 用 `zip -q -r typecho.zip *` 打的。
@@ -133,6 +133,11 @@ HTTP → admin/<page>.php
 - **跨环境比对文件哈希**：Windows 本地是 CRLF、Linux 是 LF，直接比 sha256 会把同一内容全盘误判为差异；本地侧先做 CRLF→LF 归一化，而二进制文件（png/woff/ttf）**跳过**归一化——对其做字节替换同样产生假差异（本次即因此误报 7 张图片不同）。见 `CLAUDE.md` §0.6.3。
 - **base64 分块传输会把单词劈开**：手工把 base64 拆成多块用 `>`/`>>` 拼接，块边界可能落在单词中间，落盘后文件多一行、浏览器报语法错误，而「暂存区 vs 目标区」哈希比对**两边一起错、全部显示 OK**。闸门要卡本地原件：字节数 + 行数 + sha256 三方对上才算过。见 `CLAUDE.md` §0.6.3。
 - **`cp -p` 保留的是暂存区属主**：从 `/tmp` 复制到线上目录时，`-p` 保留的是**暂存文件**的属主（root），不是目标区原有的 `www:www`。复制后需 `chown` / `chmod` 显式还原。见 `CLAUDE.md` §0.6.3。
+- **正式环境已搬到本机 WSL**（2026-10-06 起，决策见 ADR-003）：Web 层用 `php -S` + `.claude/scripts/router.php` 跑在 `:8001`，代码在 `/root/www/typecho_prod`，数据库仍复用原容器。`CLAUDE.md` §0.6 的远程发布流程已作废，发布改用 `bash .claude/scripts/_deploy_prod.sh --apply`。
+- **`php -S` 不支持 PATH_INFO**：永久链接形如 `/index.php/archives/1/` 依赖 PATH_INFO 路由，内置服务器会把后半段当文件名去找、直接 404——必须配 `router.php`，删了就全站文章页挂。
+- **`pkill -f 'php -S …'` 会自杀**：执行它的 shell 命令行里同样含该字符串，会被一起杀掉；用 PID 文件停进程（`.claude/scripts/_prod_ctl.sh`）。
+- **`rsync -a` 会保留目录 mtime**：备份脚本按 `-mtime` 清理时，会把刚建的快照当成陈旧项删掉（源 uploads 目录 mtime 是"最后一次上传"的时间）——`rsync` 后必须 `touch` 重置。
+- **从 Windows 侧调 WSL 别拼命令行**：PowerShell 会吃掉引号和重定向（`>/tmp/x` 变成 `E:\tmp\x`），复杂命令一律写成 `.claude/scripts/*.sh` 再 `wsl -- bash` 执行。
 
 ## 八、文档地图（按场景 pointer 表）
 
@@ -144,8 +149,8 @@ HTTP → admin/<page>.php
 | 改核心库/框架 | `CLAUDE.md §1 架构分层` + `var/Typecho/Widget.php` + `Router.php` |
 | 改后台页面 | `CLAUDE.md §1` + `admin/` 目录 + 对应 Widget 源码 |
 | 改数据库适配 | `var/Typecho/Db/Adapter/` + `CLAUDE.md §0.4` 已知缺口 |
-| 写插件 | `usr/plugins/HelloWorld/Plugin.php` + http://docs.typecho.org/plugins/ |
-| 写主题 | `usr/themes/default/` + `CLAUDE.md` §3（主题 PJAX 脚本纪律）+ http://docs.typecho.org/themes/ |
+| 写插件 | `usr/plugins/TinyMceForTypecho/Plugin.php` + http://docs.typecho.org/plugins/ |
+| 写主题 | `usr/themes/WaterDrop/` + `CLAUDE.md` §3（主题 PJAX 脚本纪律）+ http://docs.typecho.org/themes/ |
 | 改构建/CI | `.claude/docs/typecho-DEVELOPER_RULES.md` + `.github/workflows/` |
 | 排查 bug | `.claude/bugs/<bugId>/bug_detail.txt`（新建按规则第 3 步目录命名） |
 | 调研未决问题 | `.claude/planning/glossary.md` OpenQ 区 + `.claude/docs/typecho-GAPS.md` |

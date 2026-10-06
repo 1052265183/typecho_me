@@ -28,14 +28,14 @@ prepros.config
 config.inc.*
 usr/uploads/
 usr/*.db
-usr/plugins/
-!usr/plugins/HelloWorld
-TinyMceForTypecho/bak/
-TinyMceForTypecho/logs/
+usr/plugins/*
+!usr/plugins/*/
+usr/plugins/*/logs/
+usr/plugins/*/bak/
 usr/themes/*
-!usr/themes/default
-!usr/themes/classic-22
 !usr/themes/WaterDrop
 node_modules/
 tools/tmp/
 .claude/tmp/
+# 生产环境快照（tar.gz + 解压副本），体积大且只随生产变动，不进版本控制
+.claude/backup/

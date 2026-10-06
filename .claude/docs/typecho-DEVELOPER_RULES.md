@@ -48,7 +48,7 @@ Typecho **不依赖 Composer**，无第三方 PHP 框架。所有能力均为自
 | `usr/themes/<theme>/` | 主题，含 `functions.php` / `index.php` / `header.php` / `footer.php` / `style.css` 等 |
 | `usr/langs/<lang>.mo` | 语言包，由 `make langs` 拉取 `typecho/languages` 编译 |
 
-`.gitignore` 已排除 `usr/uploads/` / `usr/*.db` / `usr/plugins/`（除 HelloWorld）/ `usr/themes/`（除 default 与 classic-22）。
+`.gitignore` 排除 `usr/uploads/` / `usr/*.db` / `usr/themes/*`（仅 `WaterDrop` 例外）；`usr/plugins/` 整目录入库，但排除各插件自带的 `logs/` 与 `bak/`。
 
 ## 构建系统
 
@@ -257,6 +257,55 @@ wsl -d Android -- php -r '$c=require "/mnt/e/deepseek_work/typecho/config.inc.ph
 8. **PowerShell 不支持 `<` 输入重定向**：`mysql ... < file.sql` 会在 PowerShell 侧报 `The '<' operator is reserved`。改用 `mysql -e "source /path/file.sql"`，或把命令写进 `.sh` 脚本再 `wsl ... bash script.sh`。
 9. **agent-browser 无法触发 install.php 的 AJAX 表单**：install.php 用 jQuery `$.ajax` + `FormData` 提交，浏览器点击无法可靠拦截 `form.submit`；改用 `curl -X POST` 直接提交更稳。
 10. **端口 13307 非标准**：MySQL 容器映射到宿主机 `13307` 而非默认 `3306`，连接时务必指定端口。
+
+## 正式环境（本机 WSL）
+
+> 2026-10-06 起，正式博客跑在本机 WSL，替换原「宝塔 Docker + base64 分块传输」链路。决策与理由见 `02-技术设计/ADR-003`，踩坑见 `typecho-经验-WSL本地正式环境.md`。
+> **注意**：CLAUDE.md §0.6 那套「远程发布」流程已作废，只在回滚到旧环境时才需要看。
+
+### 环境拓扑
+
+```
+Windows 主机 (E:\deepseek_work\typecho)
+  └─ WSL "Android" (Ubuntu 20.04.6 LTS)
+       ├─ /root/www/typecho_prod/     正式环境代码（ext4，1.8G）
+       ├─ Docker mysql_wlzr-mysql_WLZr-1   正式库 127.0.0.1:13306
+       │                                （与开发环境共用，未迁移）
+       └─ php -S 0.0.0.0:8001 + router.php  Web 服务（4 worker）
+```
+
+| 项 | 开发 | 正式 |
+|---|---|---|
+| 代码目录 | `/mnt/e/deepseek_work/typecho` | `/root/www/typecho_prod` |
+| Web 服务 | PHP dev server `:8000` | `php -S :8001` + `router.php` |
+| 数据库 | `mysql_test` 容器 `:13307` / 库 `jbxfamr4fjr4ahaz` | `mysql_wlzr` 容器 `:13306` / 库 `Jbxfamr4fJr4AhAZ` |
+| 主题 / 插件 | 1 / 1 | 由 `_deploy_prod.sh` 同步后一致 |
+
+### 日常操作
+
+```bash
+# 服务控制
+bash .claude/scripts/_prod_ctl.sh {start|stop|restart|status|log}
+
+# 发布（默认预演，加 --apply 才实跑）
+bash .claude/scripts/_deploy_prod.sh
+bash .claude/scripts/_deploy_prod.sh --apply
+
+# 备份（数据库 + uploads 增量快照）
+bash .claude/scripts/_backup_prod.sh
+bash .claude/scripts/_backup_prod.sh --list
+
+# 探查正式环境配置与数据规模
+bash .claude/scripts/_prod_probe.sh
+```
+
+发布无需重启服务：`php -S` 每次请求都重新解析文件。
+
+### 必须知道的三件事
+
+1. **穿透客户端要把映射从 22380 改到 8001**。`siteUrl`（`xkj88.e3.luyouxia.net:29026`）存在数据库 options 表里，不在配置文件里；过渡期用 `localhost:8001` 打开时，静态资源仍按 `siteUrl` 指向穿透域名，会加载到旧环境资源。
+2. **本机不再是 7×24**：Windows 关机 / 休眠 / WSL 被终止都会让博客下线。旧宝塔环境（容器 `typecho_agbf-typecho_AGbF-1`、目录 `/www/dk_project/dk_app/typecho/typecho_AGbF/`）**暂未删除**，是现成的回滚点。
+3. **`router.php` 必须在**：删了它 `php -S` 起不来或文章页全 404（`php -S` 不支持 PATH_INFO）。源文件在 `.claude/scripts/router.php`，发布脚本会单独同步过去。
 
 ## Git 规范
 

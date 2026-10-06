@@ -8,7 +8,7 @@
 |---|---|---|
 | **Widget** | Typecho 自研组件基类，位于 `var/Typecho/Widget.php`；所有业务组件（Archive / Comments / Init 等）继承之 | `Widget::widget()` 用对象池管理 |
 | **Plugin** | 钩子机制，通过 `Typecho\Plugin::factory('<hook_point>')->call('hook_name')` 触发；插件入口 `usr/plugins/<Name>/Plugin.php` | `var/Typecho/Plugin.php` |
-| **Theme** | 前端模板，`usr/themes/<theme>/`，至少含 `functions.php` / `index.php` / `header.php` / `footer.php` / `style.css` | `usr/themes/default/` 示例 |
+| **Theme** | 前端模板，`usr/themes/<theme>/`，至少含 `functions.php` / `index.php` / `header.php` / `footer.php` / `style.css` | 本仓库现仅保留 `usr/themes/WaterDrop/`；`default` 与 `classic-22` 已移除 |
 | **Hook Point** | 字符串标识的钩子锚点，如 `index.php` / `begin` / `end` / `admin/<page>.php` 等 | 见 Plugin 文档 |
 | **DB Adapter** | 数据库适配抽象：`var/Typecho/Db/Adapter/` 下分 `Mysql` / `Mysqli` / `Pgsql` / `SQLite` + `Pdo` 子类 | 4 库适配，新增 SQL 需全部跑通 |
 | **HyperDown** | Typecho 自研 Markdown 解析器，位于 `var/Utils/HyperDown.php` | 区别于 CommonMark |
@@ -32,6 +32,7 @@
 | **CI** | Continuous Integration | `.github/workflows/Typecho-dev-Ci.yml` |
 | **POT** | Portable Object Template | i18n 模板，`tools/build_pot.php` 生成 |
 | **MO** | Machine Object | 编译后的 i18n 文件，`usr/langs/<lang>.mo` |
+| **SSRF** | Server-Side Request Forgery | 服务端按用户提供的 URL 发起请求；`download-proxy.php` 是本项目已知实例，见 `typecho-GAPS.md` G6 |
 
 ## OpenQ（开放问题）
 

@@ -5,7 +5,16 @@
 
 ## 当前状态
 
-已产生 2 条 ADR（ADR-001，2026-09-27，WaterDrop 主题复制按钮与 PJAX 脚本注入架构；ADR-002，2026-09-28，正式环境同步 WaterDrop 与复制按钮兜底修复）。本仓库历史悠久，README/CONTRIBUTING/源码中蕴含大量「先验决策」（如 PHP 版本选择、Widget 自研机制、4 数据库适配方案），但未按 ADR 形式沉淀。后续如有重大技术决策（重构、依赖变更、PHP 版本升级、数据库 schema 变动等），按 writing-for-agents 流程补写。
+已产生 3 条 ADR（ADR-001，2026-09-27，WaterDrop 主题复制按钮与 PJAX 脚本注入架构；ADR-002，2026-09-28，正式环境同步 WaterDrop 与复制按钮兜底修复；ADR-003，2026-10-06，本机 WSL 承载正式环境、替换宝塔 Docker 发布链路）。本仓库历史悠久，README/CONTRIBUTING/源码中蕴含大量「先验决策」（如 PHP 版本选择、Widget 自研机制、4 数据库适配方案），但未按 ADR 形式沉淀。后续如有重大技术决策（重构、依赖变更、PHP 版本升级、数据库 schema 变动等），按 writing-for-agents 流程补写。
+
+**编号预留**（2026-10-06 理顺）：早期文档曾把 ADR-002 预留给 G1 测试框架选型，但该号已被 ADR-002「正式环境同步」实际占用。剩余工单对应的 ADR 顺延如下，动手前不要再引用旧编号：
+
+| 工单 | 预定 ADR | 主题 |
+|---|---|---|
+| G1 | ADR-004 | 测试框架选型 |
+| T1 | ADR-005 | PHP 最低版本决策 |
+| G3 | ADR-006 | Dockerfile 决策 |
+| G2 | ADR-007 | Widget 职责拆分 |
 
 ## ADR 模板
 
@@ -36,6 +45,7 @@
 |---|---|---|---|---|
 | [ADR-001](ADR-001-WaterDrop复制按钮与PJAX脚本注入架构.md) | WaterDrop 复制按钮与 PJAX 脚本注入架构 | 已采纳 | 2026-09-27 | `usr/themes/WaterDrop/` |
 | [ADR-002](ADR-002-正式环境同步WaterDrop与复制按钮兜底修复.md) | 正式环境同步 WaterDrop 与复制按钮兜底修复 | 已采纳 | 2026-09-28 | `usr/themes/WaterDrop/` + 远程正式环境 |
+| [ADR-003](ADR-003-本机WSL承载正式环境替换宝塔Docker发布链路.md) | 本机 WSL 承载正式环境，替换宝塔 Docker 发布链路 | 已采纳 | 2026-10-06 | `.claude/scripts/` + `/root/www/typecho_prod` |
 
 ## 修订规则
 
@@ -53,4 +63,4 @@
 | 支持 4 种数据库（MySQL/MariaDB/PgSQL/SQLite） | `var/Typecho/Db/Adapter/` | 低（已稳定） |
 | 路由表写在 widget 注册时（`Widget\Init`） | `Widget\Init::alloc()` | 中（影响新页面接入） |
 | 插件钩子通过字符串匹配（`factory()->call()`） | 全部插件 | 低（API 稳定） |
-| CI 仅 `php -l` 语法检查，无单元测试 | 仓库根 | 高（工单 G1，结论落 ADR-002） |
+| CI 仅 `php -l` 语法检查，无单元测试 | 仓库根 | 高（工单 G1，结论落 ADR-004） |

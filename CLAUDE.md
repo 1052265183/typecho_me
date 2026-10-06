@@ -92,7 +92,7 @@
 ## 0.4 当前已知缺口（强制）
 
 - 动代码前必须先对 `.claude/docs/typecho-GAPS.md`（背景与理由）与 `.claude/planning/03-任务拆解/工单清单.md`（状态、验收标准、依赖）；
-- 已知缺口分三类：**代码缺口** G1~G5（影响正确性）、**待办** T1~T5、**外部依赖** E1~E4；三类编号与工单清单一一对应；
+- 已知缺口分三类：**代码缺口** G1~G6（影响正确性）、**待办** T1~T5、**外部依赖** E1~E4；三类编号与工单清单一一对应；
 - 唯一未结的开放问题是 **OQ-005**（`skip-grant-tables` 不落盘），跟踪见工单清单同号条目。
 
 ## 0.5 快速调试（冷启动 → 验证 → 常见故障）
@@ -177,6 +177,9 @@ wsl -d Android -- php /mnt/e/deepseek_work/typecho/.claude/scripts/_db_check.php
 
 ## 0.6 发布正式环境（远程写操作）
 
+> **本节已于 2026-10-06 作废**：正式环境搬到本机 WSL（`/root/www/typecho_prod`，`php -S` :8001），发布改用 `bash .claude/scripts/_deploy_prod.sh --apply`。决策见 ADR-003，操作见 `typecho-DEVELOPER_RULES.md` §正式环境。
+> **仅在回滚到旧宝塔 Docker 环境时才需要以下内容**。
+
 > 触发词：发布、部署、上线、同步到正式环境、把本项目代码更新过去。
 > 与 §0.5 的分工：§0.5 管**本地开发**，本节管**正式环境**。本节只写动手前必须知道、且从代码库查不到的环境事实；单次差异结论不写进本节（会过期），按 §0.6.3 现场重算。
 
@@ -260,7 +263,7 @@ wsl -d Android -- php /mnt/e/deepseek_work/typecho/.claude/scripts/_db_check.php
 
 ## 3. 插件与主题开发规约
 
-- **插件**：`usr/plugins/<PluginName>/Plugin.php`（示例 `HelloWorld/Plugin.php`）；实现 `\Typecho\Plugin\PluginInterface`；通过 `Typecho\Plugin::factory('<hook_point>')` 挂载钩子。
+- **插件**：`usr/plugins/<PluginName>/Plugin.php`（在用示例 `TinyMceForTypecho/Plugin.php`）；实现 `\Typecho\Plugin\PluginInterface`；通过 `Typecho\Plugin::factory('<hook_point>')` 挂载钩子。插件目录已纳入版本控制（各插件的 `logs/` 与 `bak/` 除外）。
 - **主题**：`usr/themes/<theme_name>/`；至少含 `functions.php` / `index.php` / `header.php` / `footer.php` / `comments.php` / `404.php` / `page.php` / `post.php` / `style.css`；可选 `screenshot.png`。
 - **主题 PJAX 脚本纪律（WaterDrop 实践，决策与理由见 ADR-001）**：WaterDrop 启用 PJAX（只替换 `title/meta/header/#main`），`footer.php` 内联脚本只在整页加载执行一次。给主题加 DOM 注入型功能必须遵守：
   1. **注入抽函数**：注入逻辑封装成函数，整页加载调一次、`pjax:complete` 里再调一次，已注入的元素跳过防重复；
