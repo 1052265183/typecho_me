@@ -87,6 +87,25 @@ DSH 会话早期访问 WSL 报 `Wsl/EnumerateDistros/Service/E_ACCESSDENIED`，`
 
 教训：探测失败时先判断错误码来源——`E_ACCESSDENIED` 与「服务没起」是两回事，别据此下"环境坏了"的结论。
 
+## 十一、`dubious ownership` 会让 git 拒绝一切命令
+
+**现象**：`git status` / `git fetch` 全部报 `fatal: detected dubious ownership in repository`，而目录 root 完全可写。
+
+**原因**：正式环境目录是 rsync 自宝塔容器来的，保留了混合属主（`www-data` / `www` / `huxu` / `root`）。git 认为目录所有者与当前用户不一致，判定为可疑并拒绝操作。这与 ADR-002 备选 C 记录的 WaterDrop 仓库问题是同一个。
+
+**解法**：根治用 `chown -R root:root /root/www/typecho_prod`（服务本身以 root 跑，统一属主反而一致）；再在脚本里加一条豁免兜底，防止目录再次被以其他属主 rsync 进来：
+
+```bash
+git config --global --get-all safe.directory 2>/dev/null | grep -qx "$DOCROOT" \
+    || git config --global --add safe.directory "$DOCROOT"
+```
+
+## 十二、`.gitattributes` 漏了 `.sh`，WSL 会直接拒绝执行
+
+上游 `.gitattributes` 只声明了 `*.php` / `*.js` / `*.css` / `*.html` / `*.xml` 的 `eol=lf`。但发布链路依赖 `.claude/scripts/*.sh`，**一旦以 CRLF 入库，正式环境 pull 下来执行就是 `bad interpreter: /bin/bash^M`**。
+
+**解法**：补 `*.sh text eol=lf`、`*.py text eol=lf`、`*.md text eol=lf`。开发在 Windows、执行在 Linux 的项目，这个文件不是可选项。
+
 ## 附：可复用的探查命令
 
 ```bash

@@ -78,9 +78,9 @@
   - 影响：若本项目代码或该会话记录外泄，等同于数据库凭据外泄。数据库仅本机可达（`:13306`），未暴露公网。
   - 行动：改口令需注意 `mysql_wlzr` 的 datadir 源自备份、root 改密存在 `skip-grant-tables` 不落盘的老问题（OQ-005）；应用用户自身的口令可用应用权限或 root 改，需先验证写入是否生效。
 
-- **T9：正式环境残留根目录错位副本**
-  - 现状：`/root/www/typecho_prod/TinyMceForTypecho/`（约 280 文件，11MB）是历史上放错位置的插件副本，与 `usr/plugins/TinyMceForTypecho/` 内容重复；开发目录已于 2026-10-06 清理并归位。
-  - 行动：执行 `_deploy_prod.sh --apply` 时由 `--delete` 自动清除；未执行则手动删除。
+- **T9：正式环境残留根目录错位副本** —— **已清理（2026-10-06，工单 T9 已完成）**
+  - 原状：`/root/www/typecho_prod/TinyMceForTypecho/`（约 280 文件，11MB）是历史上放错位置的插件副本，与 `usr/plugins/TinyMceForTypecho/` 内容重复；开发目录已于 2026-10-06 清理并归位。
+  - 处理：先打 56MB 备份到 `/root/backups/typecho/removed_extras_20261006.tar.gz`，`git clean -nd` 预演确认 `config.inc.php` 与 `usr/uploads` 不在删除列表后再执行；另清除 9 个多余插件与 4 个非 WaterDrop 主题（`theme=WaterDrop` 且 `plugin:active` 不存在，删除无风险）。
 
 ## 外部依赖阻塞
 

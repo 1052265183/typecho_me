@@ -133,7 +133,7 @@ HTTP → admin/<page>.php
 - **跨环境比对文件哈希**：Windows 本地是 CRLF、Linux 是 LF，直接比 sha256 会把同一内容全盘误判为差异；本地侧先做 CRLF→LF 归一化，而二进制文件（png/woff/ttf）**跳过**归一化——对其做字节替换同样产生假差异（本次即因此误报 7 张图片不同）。见 `CLAUDE.md` §0.6.3。
 - **base64 分块传输会把单词劈开**：手工把 base64 拆成多块用 `>`/`>>` 拼接，块边界可能落在单词中间，落盘后文件多一行、浏览器报语法错误，而「暂存区 vs 目标区」哈希比对**两边一起错、全部显示 OK**。闸门要卡本地原件：字节数 + 行数 + sha256 三方对上才算过。见 `CLAUDE.md` §0.6.3。
 - **`cp -p` 保留的是暂存区属主**：从 `/tmp` 复制到线上目录时，`-p` 保留的是**暂存文件**的属主（root），不是目标区原有的 `www:www`。复制后需 `chown` / `chmod` 显式还原。见 `CLAUDE.md` §0.6.3。
-- **正式环境已搬到本机 WSL**（2026-10-06 起，决策见 ADR-003）：Web 层用 `php -S` + `.claude/scripts/router.php` 跑在 `:8001`，代码在 `/root/www/typecho_prod`，数据库仍复用原容器。`CLAUDE.md` §0.6 的远程发布流程已作废，发布改用 `bash .claude/scripts/_deploy_prod.sh --apply`。
+- **正式环境已搬到本机 WSL**（2026-10-06 起，决策见 ADR-003）：Web 层用 `php -S` + 项目根 `router.php` 跑在 `:8001`，代码在 `/root/www/typecho_prod`。发布走 git——开发目录 `commit` → `push` 到 bare 仓库 `E:/deepseek_work/typecho-bare.git` → 正式环境 `bash .claude/scripts/_git_pull_prod.sh --apply`。`CLAUDE.md` §0.6 的远程发布流程已作废。
 - **`php -S` 不支持 PATH_INFO**：永久链接形如 `/index.php/archives/1/` 依赖 PATH_INFO 路由，内置服务器会把后半段当文件名去找、直接 404——必须配 `router.php`，删了就全站文章页挂。
 - **`pkill -f 'php -S …'` 会自杀**：执行它的 shell 命令行里同样含该字符串，会被一起杀掉；用 PID 文件停进程（`.claude/scripts/_prod_ctl.sh`）。
 - **`rsync -a` 会保留目录 mtime**：备份脚本按 `-mtime` 清理时，会把刚建的快照当成陈旧项删掉（源 uploads 目录 mtime 是"最后一次上传"的时间）——`rsync` 后必须 `touch` 重置。

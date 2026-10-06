@@ -267,12 +267,18 @@ wsl -d Android -- php -r '$c=require "/mnt/e/deepseek_work/typecho/config.inc.ph
 
 ```
 Windows 主机 (E:\deepseek_work\typecho)
+  ├─ E:\deepseek_work\typecho           开发目录（Windows，编辑 + commit）
+  ├─ E:\deepseek_work\typecho-bare.git  bare 仓库（发布中转，Windows/WSL 均可访问）
   └─ WSL "Android" (Ubuntu 20.04.6 LTS)
-       ├─ /root/www/typecho_prod/     正式环境代码（ext4，1.8G）
+       ├─ /root/www/typecho_prod/     正式环境代码（ext4，git 工作副本）
        ├─ Docker mysql_wlzr-mysql_WLZr-1   正式库 127.0.0.1:13306
        │                                （与开发环境共用，未迁移）
        └─ php -S 0.0.0.0:8001 + router.php  Web 服务（4 worker）
 ```
+
+**发布链路**：`开发目录 commit → push bare → 正式环境 git reset --hard bare/master`。
+选 bare 而非 GitHub 的原因：WSL 的 SSH 密钥在 GitHub 上未注册（`Permission denied (publickey)`），而 bare 仓库 Windows 与 WSL 都能直接访问，不需要公网与密钥。
+`config.inc.php` 与 `usr/uploads/` 从未入库（`.gitignore` 排除），`reset --hard` 不会创建也不会删除它们；发布脚本每次都会复核这两项。
 
 | 项 | 开发 | 正式 |
 |---|---|---|
@@ -284,12 +290,17 @@ Windows 主机 (E:\deepseek_work\typecho)
 ### 日常操作
 
 ```bash
+# 发布：开发目录提交并推送
+cd /mnt/e/deepseek_work/typecho      # 或在 Windows 侧 E:\deepseek_work\typecho
+git add -A && git commit -m "..."
+git push bare master
+
+# 发布：正式环境拉取（默认预演，加 --apply 才实跑）
+bash .claude/scripts/_git_pull_prod.sh
+bash .claude/scripts/_git_pull_prod.sh --apply
+
 # 服务控制
 bash .claude/scripts/_prod_ctl.sh {start|stop|restart|status|log}
-
-# 发布（默认预演，加 --apply 才实跑）
-bash .claude/scripts/_deploy_prod.sh
-bash .claude/scripts/_deploy_prod.sh --apply
 
 # 备份（数据库 + uploads 增量快照）
 bash .claude/scripts/_backup_prod.sh
@@ -300,6 +311,8 @@ bash .claude/scripts/_prod_probe.sh
 ```
 
 发布无需重启服务：`php -S` 每次请求都重新解析文件。
+
+> 早期版本用 `_deploy_prod.sh`（rsync 同步）发布，已被 git 方式取代。脚本保留未删除，若需一次性全量覆盖仍可用；日常发布一律走 git。
 
 ### 必须知道的三件事
 

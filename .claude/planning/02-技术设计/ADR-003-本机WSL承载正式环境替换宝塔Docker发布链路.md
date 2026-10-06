@@ -45,3 +45,34 @@
 - **过渡期行为**：穿透仍指向旧 22380 时，用 `localhost:8001` 打开页面，HTML 里的静态资源地址仍按 `siteUrl` 指向穿透域名，会加载到旧环境的资源；HTML 结构本身可正常验证。
 - **可用性变化**：博客不再 7×24——Windows 关机/休眠、WSL 被终止都会导致下线。自启配置见 DEVELOPER_RULES。
 - **可回滚**：旧环境目录 `/www/dk_project/dk_app/typecho/typecho_AGbF/` 与容器 `typecho_agbf-typecho_AGbF-1` 未动，数据库未动，穿透配置改回 22380 即恢复。
+
+## 修订
+
+### 2026-10-06：发布方式由 rsync 同步改为 git pull（同日二次修订）
+
+**修订前**：决策 6 规定发布走 `_deploy_prod.sh`（`rsync --delete` 从开发目录覆盖到正式环境），默认 dry-run。
+
+**修订后**：改为 git 工作副本 + bare 仓库中转——
+
+```
+开发目录 (Windows) --commit/push--> E:\deepseek_work\typecho-bare.git --fetch/reset--> 正式环境 (WSL)
+```
+
+**变更理由**：
+
+1. **版本可追溯**。rsync 只搬文件，正式环境处于哪个版本、哪次发布引入了故障都无法回答；git pull 让每次发布对应一个提交号，回滚即 `git reset --hard <上一提交>`。
+2. **rsync 的 `--delete` 语义与 git 天然冲突**。正式环境独有但不该被删的内容（`config.inc.php`、`usr/uploads/`）必须靠 exclude 规则保护，多一条规则就多一分出错空间；git 用 `.gitignore` 从机制上排除，更稳。
+3. **新增动作：发布前必须先 commit**。rsync 不关心工作区是否干净，git 强制"先提交才发布"，杜绝"改了没提交、发布的是旧代码"这类最常见的误发布。
+
+**选 bare 仓库而非 GitHub 作为 remote**：WSL 的 SSH 密钥未在 GitHub 注册（实测 `Permission denied (publickey)`），而 bare 仓库位于 `E:\deepseek_work\typecho-bare.git`，Windows 与 WSL 都能直接访问，不需要公网、不需要密钥、不需要浏览器。代价是它只服务于本机，无法给第三台机器共用——若将来要恢复远程部署，需改为 GitHub remote。
+
+**连带处理**：
+
+- `router.php` 从 `.claude/scripts/` 复制到项目根并纳入版本控制——否则正式环境 `git pull` 拉不到它（`.claude/` 下的脚本不进库）。
+- `.gitattributes` 补 `*.sh` / `*.py` / `*.md` 的 `eol=lf`。上游原本只声明了 PHP/JS/CSS，而 `.sh` 正是 WSL 要执行的文件，CRLF 入库会直接 `bad interpreter`。
+- `.claude/backup/`（生产快照，678 文件含 55MB tar.gz）从版本控制移除并加入 `.gitignore`，磁盘文件保留。**注意：这些文件仍留在 git 历史里**，如需彻底清除要重写历史，本次不做。
+- `usr/themes/*/.backup_*/` 加入 `.gitignore`——快照流程会在主题目录里产生备份目录。
+
+**`_deploy_prod.sh` 不删除**：仍可用于一次性全量覆盖（会 `--delete` 掉正式环境的多余文件），日常发布一律走 git。
+
+**新增坑**（已记入经验文档）：正式环境目录源自宝塔容器，`rsync` 保留了混合属主（`www-data`/`www`/`huxu`/`root`），以 root 跑 git 会触发 `dubious ownership` 拒绝一切命令。根治手段是 `chown -R root:root`，脚本内另加 `safe.directory` 豁免兜底。
