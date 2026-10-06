@@ -34,6 +34,8 @@ usr/plugins/*/logs/
 usr/plugins/*/bak/
 usr/themes/*
 !usr/themes/WaterDrop
+# 主题内的发布前备份目录（快照流程产生），属临时产物，不入库
+usr/themes/*/.backup_*/
 node_modules/
 tools/tmp/
 .claude/tmp/
