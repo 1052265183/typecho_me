@@ -111,6 +111,8 @@ Windows 主机 (E:\deepseek_work\typecho)
 
 Windows 通过 WSL2 端口转发访问，浏览器直接 `localhost:8000`。
 
+> 本节只管**本地开发**。正式环境（博客「Thron的博客」）跑在同一台机器的 WSL 里，端口 `:8001`，与开发环境**共用同一批 Docker 容器但库不同**——发布与排障见 §0.6。
+
 ### 一键启动
 
 ```bash
@@ -175,57 +177,79 @@ wsl -d Android -- php /mnt/e/deepseek_work/typecho/.claude/scripts/_db_check.php
 
 > ⚠️ **MySQL root 口令无法自助获取**：应用用户仅有单库权限，读不了 `mysql.user`；root 口令因 datadir 还原而不可知。若必须改 MySQL 账号口令，需走 `skip-grant-tables` 流程，且实测该模式下 `UPDATE` / `ALTER USER` 均不落盘（哈希未变），需先解决该问题——见 `.claude/planning/glossary.md` OQ-005。
 
-## 0.6 发布正式环境（远程写操作）
+## 0.6 发布正式环境
 
-> **本节已于 2026-10-06 作废**：正式环境搬到本机 WSL（`/root/www/typecho_prod`，`php -S` :8001），发布改用 `bash .claude/scripts/_deploy_prod.sh --apply`。决策见 ADR-003，操作见 `typecho-DEVELOPER_RULES.md` §正式环境。
-> **仅在回滚到旧宝塔 Docker 环境时才需要以下内容**。
+> 触发词：发布、部署、上线、把代码更新到正式环境。
+> 与 §0.5 的分工：§0.5 管**本地开发**，本节管**正式环境**。决策与理由见 ADR-003，日常命令见 `typecho-DEVELOPER_RULES.md` §正式环境，踩坑见 `typecho-经验-WSL本地正式环境.md`。
 
-> 触发词：发布、部署、上线、同步到正式环境、把本项目代码更新过去。
-> 与 §0.5 的分工：§0.5 管**本地开发**，本节管**正式环境**。本节只写动手前必须知道、且从代码库查不到的环境事实；单次差异结论不写进本节（会过期），按 §0.6.3 现场重算。
+### 0.6.1 拓扑
 
-### 0.6.1 硬约束（违反即事故）
+| 角色 | 位置 | 说明 |
+|---|---|---|
+| 开发目录 | `E:\deepseek_work\typecho`（Windows） | 编辑 + commit |
+| 发布中转 | `E:/deepseek_work/typecho-bare.git` | bare 仓库，Windows 与 WSL 均可访问 |
+| 正式环境 | `/root/www/typecho_prod`（WSL ext4） | git 工作副本，服务跑在 `:8001` |
+| 数据库 | 容器 `mysql_wlzr-mysql_WLZr-1` → `127.0.0.1:13306` | 复用未迁移；库名**大写** `Jbxfamr4fJr4AhAZ` |
+| Web 服务 | `php -S 0.0.0.0:8001` + 项目根 `router.php` | 4 worker，无 nginx |
 
-- **每次同步前必须 grilling 决策并记录 ADR**（强制）。同步是远程写操作，范围与回滚方式每次都可能不同；先 grill 定清「改什么 / 为什么 / 如何回滚」，落 `02-技术设计/ADR-NNN-<主题>.md` 并登记 `ADR-README.md` 索引，再动手。已落地实例：ADR-002（正式环境同步 WaterDrop 与复制按钮兜底修复）。
-- **写入通道只有宝塔面板 Bash**。服务器 SSH 未运行（root 配置为"仅密钥登录"但未配置任何密钥），`scp` / `rsync` 均不可用。传文件走面板 Bash + base64 分块。
-- **代码在宿主机 bind mount 里，不在镜像里**。容器内 `/var/www/html` 是空的，Apache DocumentRoot 指向 `/app`，而 `/app` 挂载自宿主机目录。改宿主机目录即生效、容器重建不丢；`docker cp` 进容器会在重建时蒸发。
-- **覆盖前先冻结快照**。主题快照已于 2026-09-28 建立在 `snapshots/20260928/`（tar.gz + .sha256 + .manifest 三件套），但**每次覆盖都要新建当次快照**——快照只反映生成那一刻的状态，复用旧快照等于没有回滚点。
-- **远程写操作先取得用户明确同意**再执行（本项目写远程前须说明改什么、影响什么、如何回滚）。
+### 0.6.2 发布流程（三步）
 
-### 0.6.2 正式环境拓扑
+```bash
+# 1. 开发目录：提交并推送（Windows 侧 E:\deepseek_work\typecho 执行）
+git add -A && git commit -m "..." && git push bare master
+
+# 2. 正式环境：预演（只读，显示将变动的提交与文件）
+bash .claude/scripts/_git_pull_prod.sh
+
+# 3. 正式环境：实际发布
+bash .claude/scripts/_git_pull_prod.sh --apply
+```
+
+发布脚本做四件事：`fetch` → `reset --hard bare/master` → 复核受保护路径 → `php -l` 语法检查。
+
+### 0.6.3 硬约束（违反即事故）
+
+- **发布前必须先 commit**。git 方式强制这一点，杜绝"改了没提交、发布的是旧代码"这类误发布——这正是 rsync 方式的固有漏洞。
+- **`config.inc.php` 与 `usr/uploads/` 永不参与 git**（`.gitignore` 排除），`reset --hard` 既不创建也不删除它们。前者是正式环境独立配置，后者是用户数据。脚本每次发布都会复核这两项，缺失即判定发布失败。
+- **不要用 `rsync` 做日常发布**。`_deploy_prod.sh`（rsync 版）保留仅供一次性全量覆盖，它靠 exclude 规则保护上述两个路径，多一条规则就多一分出错空间；git 用 `.gitignore` 从机制上排除，更稳。
+- **发布后无需重启服务**。`php -S` 每次请求都重新解析文件。服务本身的启停用 `bash .claude/scripts/_prod_ctl.sh {start|stop|restart|status|log}`（PID 文件停进程，**不要用 `pkill -f 'php -S …'`**——会连执行它的 shell 一起杀掉）。
+- **主题改动必须浏览器实测**。`php -l` 只查 PHP 层，`</script>` 闭合缺失等 HTML 层问题只有真实整页加载能暴露——与 §3 主题 PJAX 纪律同理。
+- **不要在正式环境直接改代码**。正式环境应是 git 工作副本的干净检出（`git status` 应为 0 项）；手工改动会在下次 `reset --hard` 时被静默丢弃。
+
+### 0.6.4 验证
+
+```bash
+curl -s -o /dev/null -w "%{http_code}" http://localhost:8001/                    # 首页
+curl -s -o /dev/null -w "%{http_code}" http://localhost:8001/admin/login.php       # 后台
+curl -s -o /dev/null -w "%{http_code}" http://localhost:8001/index.php/feed/       # RSS（含全部文章）
+```
+
+> **注意**：`siteUrl`（`xkj88.e3.luyouxia.net:29026`）存在数据库 options 表里，不随代码同步。穿透仍指向旧端口时，用 `localhost:8001` 打开页面，静态资源仍会按 `siteUrl` 指向穿透域名加载旧环境资源——这是预期的，HTML 结构本身可正常验证。
+
+### 0.6.5 回滚
+
+```bash
+# 开发侧：把上一提交推上去
+git push bare <上一提交号>:master
+
+# 正式环境：拉取并复位
+bash .claude/scripts/_git_pull_prod.sh --apply
+```
+
+数据回滚另算：数据库用 `bash .claude/scripts/_backup_prod.sh --list` 找备份（每日全量 dump，保留 14 天）；`uploads` 用 `--link-dest` 增量快照（保留 7 天）。
+
+### 0.6.6 旧宝塔 Docker 环境（2026-10-06 起弃用，仅回滚参考）
+
+以下信息**仅在需要回滚到旧环境时才查**，日常发布一律不用。
 
 | 项 | 值 |
 |---|---|
-| 容器 | `typecho_agbf-typecho_AGbF-1`（compose 项目 `typecho_agbf`） |
-| 镜像 | `joyqi/typecho:1.2.1-php8.0-apache`（Typecho 1.2.1 + PHP 8.0 + Apache 2.4） |
-| 宿主机代码目录 | `/www/dk_project/dk_app/typecho/typecho_AGbF/data` → 容器 `/app` |
-| 宿主机工程目录 | `/www/dk_project/dk_app/typecho/typecho_AGbF/`（含 `data/` `c_plugins/` `snapshots/` `.env` `docker-compose.yml`） |
-| 对外端口 | `22380` |
-| 数据库 | 容器 `mysql_Ni7e`，库 `Jbxfamr4fJr4AhAZ`（**与本地库 `jbxfamr4fjr4ahaz` 同名不同库**，别搞混） |
-| 快照目录 | `…/typecho_AGbF/snapshots/<yyyymmdd>/`，沿用「tar.gz + .sha256 + .manifest」三件套 |
-| 生效主题 | WaterDrop（`data/usr/themes/WaterDrop/`，带独立 `.git`） |
+| 容器 | `typecho_agbf-typecho_AGbF-1`，镜像 `joyqi/typecho:1.2.1-php8.0-apache`，端口 `22380` |
+| 数据目录 | `/www/dk_project/dk_app/typecho/typecho_AGbF/data`（bind mount 到容器 `/app`） |
+| 快照 | `…/typecho_AGbF/snapshots/20260928/`（tar.gz + .sha256 + .manifest 三件套） |
+| 写入通道 | 仅宝塔面板 Bash——服务器 SSH 未运行（root 配了"仅密钥登录"但无密钥），`scp`/`rsync` 不可用 |
 
-> **IP 不写死**：服务器公网 / 内网地址用宝塔 `ServerIP` 现场查（历史上内网曾为 `172.29.51.111`，本机在该网段内可直连对外端口做部署后验证；换机器或换网络后此结论可能失效，以 `ServerIP` 为准）。
-
-### 0.6.3 发布流程
-
-1. **只读比对，不假设"本地的一定新"**。逐文件哈希对比，生产环境的 `data/` 目录可能有本地没有的手工改动。反方向（服务器领先于本项目）同样要能发现。
-   - 本地 Windows 侧**先做 CRLF→LF 归一化**再算哈希，否则同一内容因行尾符不同全盘误判为差异；
-   - 二进制文件（png / woff / ttf / jar）**跳过归一化**——对其做字节替换会破坏内容，同样产生假差异。
-2. **冻结快照**：把待覆盖目录打包进 `snapshots/<日期>/`，附 `.sha256`，回滚路径先确认可用再动文件。
-3. **传输**：面板 Bash 写临时文件，base64 传输，落地后 `base64 -d` 解码；按 LF 落盘，与远程现状保持一致。
-   - **优先单条整传，不要手工分块**。本次手工把一个 4100 字符的 base64 拆成三块用 `>` / `>>` 拼接，块边界把一个单词劈成两半（`ZG9jdW1lbnQu` + `bm9keS5yZW1vdmU`），落盘后文件多出一行、浏览器报 `missing ) after argument list`。
-   - **闸门要卡在"本地原件"上**：只比对"暂存区 vs 目标区"会两边一起错、全部显示 OK。正确做法是解出后**三方比对**——本地原文件字节数 + 行数 + sha256 全部对上才算过。字节数是最快的一道：4111 vs 3073 一眼可辨。
-4. **替换**：保留原属主（`www` / `www-data`）与权限。注意 `cp -p` 保留的是**暂存区文件**的属主（root），不是目标区原有的；复制后需 `chown` / `chmod` 显式还原，否则与目录内其他文件不一致。
-5. **验证**：用宝塔 `ServerIP` 取内网地址，浏览器直连 `http://<内网IP>:22380/` 看真实渲染。主题改动必须浏览器实测——与 §3 主题 PJAX 纪律同理，`php -l` 查不出模板层问题。
-
-### 0.6.4 同步记录（非信源）
-
-> 最近一次同步：**2026-09-28**，已按 ADR-002 完成并经用户实测确认。**下次同步前必须按 §0.6.3 重新比对**，不要拿这份记录直接覆盖。
-
-- 核心库与后台（`var/` `admin/` 根 `index.php` `install.php`）与本项目**完全一致**，无需发布；
-- 已发布 7 个文件：`index.php`（首页三列紧凑网格）、`footer.php`、`post.php`、`static/css/common.css`、`static/js/copy-page.js`，新增 `static/js/clipboard.js`、`static/js/copy-code.js`；
-- 正式环境为 http（非安全上下文），两个复制按钮的 `execCommand` 兜底路径已在真实点击下验证通过；
-- 回滚点：`snapshots/20260928/`（tar.gz + .sha256 + .manifest）。
+> **该环境的三个坑（已由 ADR-003 规避，留档以防重蹈）**：① base64 分块传输会把单词劈开，块边界落进文件中间导致浏览器报语法错误，而"暂存区 vs 目标区"哈希比对两边一起错、全部显示 OK——闸门必须卡在本地原件上做字节数 + 行数 + sha256 三方比对；② `cp -p` 保留的是暂存区文件属主（root）而非目标区原有的，复制后需 `chown`/`chmod` 显式还原；③ 跨环境比哈希前，Windows 侧必须做 CRLF→LF 归一化，二进制文件（png/woff/ttf）跳过归一化，否则全盘误判差异。
 
 ## 0.7 凭据存放与获取（不写值，只写去哪儿取）
 
@@ -235,7 +259,7 @@ wsl -d Android -- php /mnt/e/deepseek_work/typecho/.claude/scripts/_db_check.php
 |---|---|---|
 | 本地 Typecho 数据库账号/密码/库名 | 项目根 `config.inc.php`（不进 git，由 install.php 生成） | 有 `db_user` / `db_password` / `db_name` 三项；MySQL 应用用户仅有该库权限 |
 | 本地 MySQL 应用用户口令 | 同上 `config.inc.php` 的 `db_password`，或 `env | Select-String "TYPECHO_DB"` 查已设的环境变量 | 也可用 `.claude/scripts/_mysql_query.py`，它只认 `TYPECHO_DB_USER` / `TYPECHO_DB_PASS` 环境变量 |
-| 正式环境数据库凭据 | 宿主机 `…/typecho_AGbF/.env` 的 `MYSQL_*` 变量 | 不在仓库内，需登服务器查 |
+| 正式环境数据库凭据 | 正式环境 `/root/www/typecho_prod/config.inc.php`（与开发环境各自独立，不进 git）；容器侧另有 `/www/dk_project/dk_app/typecho/typecho_AGbF/.env` 的 `MYSQL_*` | 本机即可取，无需登服务器 |
 | MySQL root 口令 | **无**——datadir 从 `mysql_WLzr` 备份还原，容器 env 的 `MYSQL_ROOT_PASSWORD` 只在首次初始化生效 | 见 §0.5 管理员密码重置；改 root 口令的阻塞见 glossary OQ-005 |
 | Typecho 管理员账号 | `huxu`（口令不可反解，库中仅 phpass 哈希） | 重置走 §0.5「管理员密码重置」，无需 root |
 

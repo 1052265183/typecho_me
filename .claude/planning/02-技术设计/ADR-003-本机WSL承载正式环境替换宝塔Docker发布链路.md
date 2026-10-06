@@ -75,4 +75,6 @@
 
 **`_deploy_prod.sh` 不删除**：仍可用于一次性全量覆盖（会 `--delete` 掉正式环境的多余文件），日常发布一律走 git。
 
+**对 ADR-002 决策 8 的调整**：ADR-002 要求「每次同步正式环境前必须 grilling 决策并记录 ADR」，理由是"同步是远程写操作，范围与回滚方式每次都可能不同"。该前提在本方案下已不成立——范围由 commit 界定、回滚是 `git reset --hard`，两者都不再需要临场判断。因此**调整为**：纯代码发布由 git 提交历史承担追溯职责，无需 ADR；**涉及数据库 schema 变更、数据迁移、或跨环境配置改动的发布，仍必须先 grilling 并记录 ADR**。
+
 **新增坑**（已记入经验文档）：正式环境目录源自宝塔容器，`rsync` 保留了混合属主（`www-data`/`www`/`huxu`/`root`），以 root 跑 git 会触发 `dubious ownership` 拒绝一切命令。根治手段是 `chown -R root:root`，脚本内另加 `safe.directory` 豁免兜底。

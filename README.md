@@ -130,9 +130,7 @@ HTTP → admin/<page>.php
 - **Makefile 用 tar.gz 打包**：`tools/Makefile` 的 `package` target 输出 `build.tar.gz`，**不是** `.zip`；CI 的 zip 是 `.github/workflows/Typecho-release-Ci.yml` 用 `zip -q -r typecho.zip *` 打的。
 - **本地开发环境在 WSL 里跑**：PHP 8.2 + Docker 装在 WSL "Android"（实际 Ubuntu 20.04）发行版中，MySQL 容器 `mysql_test` 映射端口 `13307`。快速启动 / 凭据 / 排障见 `CLAUDE.md` §0.5；完整还原流程见 `.claude/docs/typecho-DEVELOPER_RULES.md` §本地开发环境。
 - **datadir 还原后 root 密码失效**：容器 env 的 `MYSQL_ROOT_PASSWORD` 只在镜像首次初始化时写入，替换 datadir 后失效；此时唯一可用凭据是备份中已存在的应用用户，改 MySQL 账号密码需先解决 `skip-grant-tables` 不落盘的问题（`glossary.md` OQ-005）。
-- **跨环境比对文件哈希**：Windows 本地是 CRLF、Linux 是 LF，直接比 sha256 会把同一内容全盘误判为差异；本地侧先做 CRLF→LF 归一化，而二进制文件（png/woff/ttf）**跳过**归一化——对其做字节替换同样产生假差异（本次即因此误报 7 张图片不同）。见 `CLAUDE.md` §0.6.3。
-- **base64 分块传输会把单词劈开**：手工把 base64 拆成多块用 `>`/`>>` 拼接，块边界可能落在单词中间，落盘后文件多一行、浏览器报语法错误，而「暂存区 vs 目标区」哈希比对**两边一起错、全部显示 OK**。闸门要卡本地原件：字节数 + 行数 + sha256 三方对上才算过。见 `CLAUDE.md` §0.6.3。
-- **`cp -p` 保留的是暂存区属主**：从 `/tmp` 复制到线上目录时，`-p` 保留的是**暂存文件**的属主（root），不是目标区原有的 `www:www`。复制后需 `chown` / `chmod` 显式还原。见 `CLAUDE.md` §0.6.3。
+- **旧环境的三个发布坑已归档**：base64 分块传输把单词劈开、跨环境哈希比对应先做 CRLF→LF 归一化、`cp -p` 保留暂存区属主——三者均为宝塔 Docker 时代的产物，当前发布走 git 已全部规避（ADR-003）。回滚到旧环境时再查 `CLAUDE.md` §0.6.6。
 - **正式环境已搬到本机 WSL**（2026-10-06 起，决策见 ADR-003）：Web 层用 `php -S` + 项目根 `router.php` 跑在 `:8001`，代码在 `/root/www/typecho_prod`。发布走 git——开发目录 `commit` → `push` 到 bare 仓库 `E:/deepseek_work/typecho-bare.git` → 正式环境 `bash .claude/scripts/_git_pull_prod.sh --apply`。`CLAUDE.md` §0.6 的远程发布流程已作废。
 - **`php -S` 不支持 PATH_INFO**：永久链接形如 `/index.php/archives/1/` 依赖 PATH_INFO 路由，内置服务器会把后半段当文件名去找、直接 404——必须配 `router.php`，删了就全站文章页挂。
 - **`pkill -f 'php -S …'` 会自杀**：执行它的 shell 命令行里同样含该字符串，会被一起杀掉；用 PID 文件停进程（`.claude/scripts/_prod_ctl.sh`）。

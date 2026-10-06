@@ -44,7 +44,7 @@
 | ADR | 主题 | 状态 | 日期 | 影响范围 |
 |---|---|---|---|---|
 | [ADR-001](ADR-001-WaterDrop复制按钮与PJAX脚本注入架构.md) | WaterDrop 复制按钮与 PJAX 脚本注入架构 | 已采纳 | 2026-09-27 | `usr/themes/WaterDrop/` |
-| [ADR-002](ADR-002-正式环境同步WaterDrop与复制按钮兜底修复.md) | 正式环境同步 WaterDrop 与复制按钮兜底修复 | 已采纳 | 2026-09-28 | `usr/themes/WaterDrop/` + 远程正式环境 |
+| [ADR-002](ADR-002-正式环境同步WaterDrop与复制按钮兜底修复.md) | 正式环境同步 WaterDrop 与复制按钮兜底修复 | 已采纳（发布链路部分被 ADR-003 取代） | 2026-09-28 | `usr/themes/WaterDrop/` + 远程正式环境 |
 | [ADR-003](ADR-003-本机WSL承载正式环境替换宝塔Docker发布链路.md) | 本机 WSL 承载正式环境，替换宝塔 Docker 发布链路 | 已采纳 | 2026-10-06 | `.claude/scripts/` + `/root/www/typecho_prod` |
 
 ## 修订规则

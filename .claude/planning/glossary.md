@@ -18,7 +18,7 @@
 | **Pingback** | XML-RPC 协议的应用，用于博客引用通知；Typecho 服务端实现见 `var/IXR/Pingback.php` | — |
 | **Nightly** | 每日构建，由 `.github/workflows/Typecho-dev-Ci.yml` 在 dev push 到 master 时自动打包上传（asset ID `49532662`） | 与正式 release 区分 |
 | **PJAX** | pushState + Ajax：换页时只替换页面局部 DOM（WaterDrop 主题为 `title/meta/header/#main`），不整页刷新；后果是 `footer.php` 内联脚本只在首次整页加载执行一次 | 决策与理由见 ADR-001；主题脚本纪律见 CLAUDE.md §3 |
-| **正式环境** | 本项目自建的线上 Typecho 博客，与本地开发环境相对；部署在宝塔服务器的 Docker 容器 `typecho_agbf-typecho_AGbF-1`，代码挂载自宿主机 `…/typecho_AGbF/data` | 发布流程见 CLAUDE.md §0.6 |
+| **正式环境** | 本项目自建的线上 Typecho 博客（「Thron的博客」），与本地开发环境相对；跑在本机 WSL 的 `/root/www/typecho_prod`，Web 层为 `php -S` + `router.php`（`:8001`），数据库复用容器 `mysql_wlzr-mysql_WLZr-1` | 发布流程见 CLAUDE.md §0.6；决策见 ADR-003。旧形态（宝塔 Docker 容器 `:22380`）已弃用 |
 
 ## 缩写
 
