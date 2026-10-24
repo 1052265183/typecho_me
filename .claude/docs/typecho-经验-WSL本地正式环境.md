@@ -106,6 +106,25 @@ git config --global --get-all safe.directory 2>/dev/null | grep -qx "$DOCROOT" \
 
 **解法**：补 `*.sh text eol=lf`、`*.py text eol=lf`、`*.md text eol=lf`。开发在 Windows、执行在 Linux 的项目，这个文件不是可选项。
 
+## 十三、WSL 重启带走服务，且抢跑会全站 503
+
+**现象**（2026-10-24 实测）：隔一段时间回来，`curl localhost:8001` 返回 `000`，`_prod_ctl.sh status` 报「未运行」——WSL 重启把 `php -S` 进程带走了。手工重新 `start` 后**所有页面返回 503**，而容器随后才显示 `Up 12 seconds`（Docker 在 WSL 启动后自己拉的）。
+
+**原因**：两个问题叠在一起。
+
+1. **PHP 进程不自启**：`php -S` 是手工 `setsid nohup` 起的，WSL 重启后没有守护进程把它拉回来。这是工单 T7（开机自启缺失）的真实后果，不是偶发。
+2. **抢跑导致 503**：PHP 每请求建连，服务若在数据库容器可用前起来，所有请求都连不上库。容器由 Docker 在 WSL 启动后拉起，需要几秒——这几秒内站点就是 503。
+
+**解法**：把「等依赖就绪」做进启动脚本（`_prod_ctl.sh start`）——先确认 `mysql_wlzr` 容器在跑（必要时 `docker start`），再轮询 `mysqladmin ping` 直到就绪，最后才起 PHP。实测输出 `数据库就绪 → 已启动`，起来后首请求即 200。
+
+**教训**：启动顺序不能靠人记，必须写进脚本；「依赖就绪」要用可观测信号（`mysqladmin ping`）判断，不能用固定 `sleep` 猜。
+
+## 十四、Python 字节码缓存被误入库
+
+`.claude/scripts/__pycache__/*.cpython-314.pyc` 曾被提交进版本库——`.gitignore` 只排除了 `.claude/tmp/` 与 `.claude/backup/`，没管 Python 缓存。这类文件随解释器版本变化（文件名含 `cpython-314`），属机器本地产物，入库只制造无意义 diff。
+
+**解法**：`.gitignore` 加 `__pycache__/` 与 `*.pyc`，并 `git rm -r --cached` 移除跟踪（磁盘文件保留）。
+
 ## 附：可复用的探查命令
 
 ```bash

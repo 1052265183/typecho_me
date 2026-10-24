@@ -41,3 +41,6 @@ tools/tmp/
 .claude/tmp/
 # 生产环境快照（tar.gz + 解压副本），体积大且只随生产变动，不进版本控制
 .claude/backup/
+# Python 字节码缓存：随解释器版本变化（如 cpython-314），属机器本地产物
+__pycache__/
+*.pyc

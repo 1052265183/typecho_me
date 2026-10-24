@@ -136,6 +136,7 @@ HTTP → admin/<page>.php
 - **`pkill -f 'php -S …'` 会自杀**：执行它的 shell 命令行里同样含该字符串，会被一起杀掉；用 PID 文件停进程（`.claude/scripts/_prod_ctl.sh`）。
 - **`rsync -a` 会保留目录 mtime**：备份脚本按 `-mtime` 清理时，会把刚建的快照当成陈旧项删掉（源 uploads 目录 mtime 是"最后一次上传"的时间）——`rsync` 后必须 `touch` 重置。
 - **从 Windows 侧调 WSL 别拼命令行**：PowerShell 会吃掉引号和重定向（`>/tmp/x` 变成 `E:\tmp\x`），复杂命令一律写成 `.claude/scripts/*.sh` 再 `wsl -- bash` 执行。
+- **WSL 重启会带走正式环境服务**：`php -S` 不自启，重启后 `localhost:8001` 直接返回 000；且若抢在数据库容器就绪前启动，全站 503。用 `bash .claude/scripts/_prod_ctl.sh start`（已内置等待数据库），不要手工 `php -S`。开机自启仍未配置，见工单 T7。
 
 ## 八、文档地图（按场景 pointer 表）
 

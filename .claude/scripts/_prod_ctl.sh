@@ -24,6 +24,26 @@ start() {
     if [[ -f "$PIDFILE" ]] && kill -0 "$(cat "$PIDFILE")" 2>/dev/null; then
         echo "已在运行（PID $(cat "$PIDFILE")）"; return 0
     fi
+
+    # 先确保数据库容器就绪：WSL 重启后 Docker 拉起容器需要几秒，
+    # 而 PHP 是每请求建连。若抢在容器可用前起服务，整站会连续返回 503
+    # （2026-10-24 实测：WSL 重启后手工 start，所有页面 503，等容器起来才恢复）。
+    local db_id
+    db_id="$(docker ps -a --format '{{.ID}} {{.Names}}' | awk '/mysql_wlzr/ {print $1; exit}')"
+    if [[ -n "$db_id" ]] && [[ "$(docker inspect -f '{{.State.Running}}' "$db_id" 2>/dev/null)" != "true" ]]; then
+        echo "数据库容器未运行，先启动…"
+        docker start "$db_id" > /dev/null
+    fi
+    if [[ -n "$db_id" ]]; then
+        for _ in $(seq 1 20); do
+            if docker exec "$db_id" mysqladmin ping --silent > /dev/null 2>&1; then
+                echo "数据库就绪"
+                break
+            fi
+            sleep 1
+        done
+    fi
+
     cd "$DOCROOT"
     # WORKERS 让内置服务器起多个 worker，避免单线程被慢请求（如图片代理）阻塞
     PHP_CLI_SERVER_WORKERS="$WORKERS" setsid nohup php -S "0.0.0.0:$PORT" -t . router.php \
