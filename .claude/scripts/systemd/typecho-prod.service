@@ -1,0 +1,28 @@
+[Unit]
+# 正式环境 Web 服务（php -S + router.php）
+#
+# 定位：随 WSL 启动而自动拉起，不配置 Windows 开机自启。
+# 即「WSL 起来了，博客就在」；Windows 开机是否自动拉起 WSL 由用户自行决定，不归本 unit 管。
+#
+# 依赖关系刻意写成 Wants + After 而非 Requires：
+#   - Wants 让本服务在数据库不可用时仍尝试启动（PHP 是每请求建连，容器稍后就绪也能恢复）；
+#   - 若写 Requires，数据库容器一时起不来会导致整个 unit 失败并停在 failed 状态。
+# 真正的「等数据库就绪」由 ExecStartPre 的轮询负责。
+Description=Typecho production web (php -S :8001)
+After=network.target
+
+[Service]
+Type=simple
+WorkingDirectory=/root/www/typecho_prod
+Environment=PHP_CLI_SERVER_WORKERS=4
+# 不走 _prod_ctl.sh：systemd 自己管进程生命周期，再套一层 setsid/nohup + PID 文件会打架。
+# 前置步骤负责把数据库容器拉起来并等它就绪，避免抢跑导致全站 503。
+ExecStartPre=/usr/local/bin/typecho-prod-wait-db
+ExecStart=/usr/bin/php -S 0.0.0.0:8001 -t . router.php
+Restart=always
+RestartSec=5
+StandardOutput=append:/var/log/typecho-prod.log
+StandardError=append:/var/log/typecho-prod.log
+
+[Install]
+WantedBy=multi-user.target

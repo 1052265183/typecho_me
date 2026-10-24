@@ -212,7 +212,10 @@ bash .claude/scripts/_git_pull_prod.sh --apply
 - **发布前必须先 commit**。git 方式强制这一点，杜绝"改了没提交、发布的是旧代码"这类误发布——这正是 rsync 方式的固有漏洞。
 - **`config.inc.php` 与 `usr/uploads/` 永不参与 git**（`.gitignore` 排除），`reset --hard` 既不创建也不删除它们。前者是正式环境独立配置，后者是用户数据。脚本每次发布都会复核这两项，缺失即判定发布失败。
 - **不要用 `rsync` 做日常发布**。`_deploy_prod.sh`（rsync 版）保留仅供一次性全量覆盖，它靠 exclude 规则保护上述两个路径，多一条规则就多一分出错空间；git 用 `.gitignore` 从机制上排除，更稳。
-- **发布后无需重启服务**。`php -S` 每次请求都重新解析文件。服务本身的启停用 `bash .claude/scripts/_prod_ctl.sh {start|stop|restart|status|log}`（PID 文件停进程，**不要用 `pkill -f 'php -S …'`**——会连执行它的 shell 一起杀掉）。该脚本 `start` 会先等数据库容器就绪再起 PHP；不要绕过它手工 `php -S`，否则 WSL 重启后抢在容器可用前启动会导致全站 503。
+- **发布后无需重启服务**。`php -S` 每次请求都重新解析文件。
+- **服务由 WSL 内 systemd 管理，不要手工抢端口**。`typecho-prod.service` 随 WSL 启动自动拉起（`systemctl status typecho-prod`），`Restart=always` 会在崩溃后自愈。调试时若要临时停，用 `systemctl stop typecho-prod`；**不要**直接 `php -S` 或 `_prod_ctl.sh start`，否则与 systemd 抢 8001 端口。`_prod_ctl.sh` 仅在未安装 systemd 时作为手工启停手段保留——它的 `start` 会先等数据库容器就绪，避免抢跑导致全站 503。
+- **不配 Windows 开机自启**。WSL 启动则服务自动就绪；但 Windows 冷启动后 WSL 本身不会自启，博客会保持下线直到你打开 WSL。这是有意取舍，不是故障（决策见 ADR-003）。
+- **备份由 `typecho-backup.timer` 每日 03:30 自动执行**（`systemctl list-timers typecho-backup`），`Persistent=true` 保证错过的执行在下次启动后补跑。手工补备份仍可用 `_backup_prod.sh`。
 - **主题改动必须浏览器实测**。`php -l` 只查 PHP 层，`</script>` 闭合缺失等 HTML 层问题只有真实整页加载能暴露——与 §3 主题 PJAX 纪律同理。
 - **不要在正式环境直接改代码**。正式环境应是 git 工作副本的干净检出（`git status` 应为 0 项）；手工改动会在下次 `reset --hard` 时被静默丢弃。
 

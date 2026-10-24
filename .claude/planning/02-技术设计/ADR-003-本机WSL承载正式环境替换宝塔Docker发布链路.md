@@ -78,3 +78,30 @@
 **对 ADR-002 决策 8 的调整**：ADR-002 要求「每次同步正式环境前必须 grilling 决策并记录 ADR」，理由是"同步是远程写操作，范围与回滚方式每次都可能不同"。该前提在本方案下已不成立——范围由 commit 界定、回滚是 `git reset --hard`，两者都不再需要临场判断。因此**调整为**：纯代码发布由 git 提交历史承担追溯职责，无需 ADR；**涉及数据库 schema 变更、数据迁移、或跨环境配置改动的发布，仍必须先 grilling 并记录 ADR**。
 
 **新增坑**（已记入经验文档）：正式环境目录源自宝塔容器，`rsync` 保留了混合属主（`www-data`/`www`/`huxu`/`root`），以 root 跑 git 会触发 `dubious ownership` 拒绝一切命令。根治手段是 `chown -R root:root`，脚本内另加 `safe.directory` 豁免兜底。
+
+### 2026-10-24：正式环境由 WSL 内 systemd 自启，不配置 Windows 开机自启（决策）
+
+**决策**（分两层，不要混为一谈）：
+
+| 层 | 做法 | 理由 |
+|---|---|---|
+| **WSL 内的服务自启** | **做** —— systemd unit `typecho-prod.service` 随 WSL 启动自动拉起；`typecho-backup.timer` 每日 03:30 自动备份 | WSL 只要起来了，博客就自动就绪，不必记着敲命令 |
+| **Windows 开机自启** | **不做** —— 不配任务计划程序、不自动拉起 WSL | 是否让电脑开机就跑 WSL，由用户按当时需要决定 |
+
+**实现要点**：
+
+1. **用 systemd 而非自建守护**：本机 WSL 已启用 systemd（`/etc/wsl.conf` 的 `systemd=true`，PID 1 为 systemd），直接复用其生命周期管理，不需要再写 cron @reboot 或 watchdog。
+2. **`ExecStartPre` 负责等数据库**：`typecho-prod-wait-db` 先等 Docker 守护进程可用，再定位容器（按 Names 匹配，不用大小写敏感的 `--filter name=`），必要时 `docker start`，然后轮询 `mysqladmin ping` 直到就绪。理由：PHP 每请求建连，抢在容器就绪前启动会让**全站 503**（已实测）。
+3. **等待脚本一律 `exit 0`**：数据库最终没起来时仍放行 Web 服务。宁可站点先返回 503（容器起来后自动恢复），也不要让 unit 卡在 failed 状态、需要人工 `systemctl reset-failed`。
+4. **`Restart=always` + `RestartSec=5`**：进程异常退出自动拉起，覆盖 `php -S` 偶发崩溃。
+5. **不套 `_prod_ctl.sh`**：systemd 自己管进程生命周期，再叠一层 `setsid`+PID 文件会互相打架。`_prod_ctl.sh` 保留给手工临时启停（调试用），安装 systemd 时脚本会自动先停掉它避免抢 8001 端口。
+6. **备份 timer 用 `Persistent=true`**：笔记本经常关机，错过的执行在下次 WSL 启动后补跑一次。
+
+**与前一版决策的关系**：同日曾记录「不做开机自启、完全手动启动」，随后修正为上述分层方案——「不配 Windows 开机自启」保留，「WSL 内服务自启」改为要做。前一版把两层混为一个决策，是记录错误。
+
+**验证**（2026-10-24）：`systemctl stop` 后端口释放；`systemctl start` 后 3 秒内 active，首页/文章页/后台均 200；`is-enabled` 为 `enabled`。
+
+**运维影响**：
+
+- **T7 关闭**：原「无开机自启」缺口已由本决策解决（备份定时任务一并落地）。
+- **仍需注意**：WSL 本身不会因 Windows 开机而自动启动，所以**冷启动 Windows 后博客仍下线**，直到你打开 WSL（或任何触发 WSL 启动的操作）。这是有意的取舍，不是故障。

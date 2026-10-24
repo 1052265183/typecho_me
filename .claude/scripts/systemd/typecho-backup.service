@@ -1,0 +1,13 @@
+[Unit]
+# 正式环境每日备份（数据库全量 dump + uploads 增量快照）
+#
+# 与 typecho-prod.service 配套：服务随 WSL 启动，备份随 systemd timer 每日执行。
+# 不配置 Windows 侧计划任务。
+Description=Typecho production daily backup
+
+[Service]
+Type=oneshot
+# 复用既有备份脚本，避免两套逻辑漂移；脚本内部自己处理容器定位与保留期清理
+ExecStart=/bin/bash /root/www/typecho_prod/.claude/scripts/_backup_prod.sh
+StandardOutput=append:/var/log/typecho-backup.log
+StandardError=append:/var/log/typecho-backup.log

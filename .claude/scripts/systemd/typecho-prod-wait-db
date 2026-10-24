@@ -1,0 +1,52 @@
+#!/usr/bin/env bash
+# systemd ExecStartPre：确保正式环境的数据库容器处于就绪状态。
+#
+# 为什么需要它：PHP 内置服务器是「每请求建连」，若在容器可用前起服务，
+# 所有请求都会 503（2026-10-24 实测过，整站 503 直到容器起来）。
+# WSL 刚启动时 Docker 守护进程本身可能还在拉起，所以这里既要等 Docker，也要等 MySQL。
+#
+# 退出码约定：一律 exit 0。数据库最终没起来时仍放行 Web 服务——
+# 宁可让站点先返回 503（可自动恢复），也不要让 unit 卡在 failed、需要人工 systemctl reset-failed。
+set -uo pipefail
+
+CONTAINER_PATTERN="mysql_wlzr"
+TIMEOUT="${DB_WAIT_TIMEOUT:-120}"
+
+log() { echo "[wait-db] $*"; }
+
+deadline=$(( $(date +%s) + TIMEOUT ))
+
+# 1. 等 Docker 守护进程可用（WSL 刚启动时 docker.socket 可能还没就绪）
+until docker info > /dev/null 2>&1; do
+    if [[ $(date +%s) -ge $deadline ]]; then
+        log "Docker 在 ${TIMEOUT}s 内未就绪，放行 Web 服务（站点会暂返 503）"
+        exit 0
+    fi
+    sleep 2
+done
+
+# 2. 取得容器 ID（不用 --filter name=：它区分大小写，容器名实为 mysql_wlzr-mysql_WLZr-1）
+db_id="$(docker ps -a --format '{{.ID}} {{.Names}}' | awk -v p="$CONTAINER_PATTERN" '$0 ~ p {print $1; exit}')"
+if [[ -z "$db_id" ]]; then
+    log "找不到容器（pattern: $CONTAINER_PATTERN），放行 Web 服务"
+    exit 0
+fi
+
+# 3. 容器没跑就拉起来
+if [[ "$(docker inspect -f '{{.State.Running}}' "$db_id" 2>/dev/null)" != "true" ]]; then
+    log "启动容器 $db_id"
+    docker start "$db_id" > /dev/null 2>&1 || log "docker start 失败"
+fi
+
+# 4. 轮询 MySQL 就绪：用 mysqladmin ping，不用固定 sleep 猜
+while :; do
+    if docker exec "$db_id" mysqladmin ping --silent > /dev/null 2>&1; then
+        log "数据库就绪"
+        exit 0
+    fi
+    if [[ $(date +%s) -ge $deadline ]]; then
+        log "数据库在 ${TIMEOUT}s 内未就绪，放行 Web 服务（站点会暂返 503）"
+        exit 0
+    fi
+    sleep 2
+done

@@ -69,10 +69,10 @@
   - 影响：不切换则外网访问仍是旧环境，开发成果无法从外网看到；此时用 `localhost:8001` 打开，静态资源也仍按 `siteUrl` 指向穿透域名。
   - 行动：在内网穿透服务商后台把映射端口改为 8001（客户端不在本仓库内，无法代劳）。
 
-- **T7：正式环境无开机自启**
-  - 现状：`php -S` 由 `_prod_ctl.sh start` 手动拉起；Windows 重启 / WSL 被终止后博客即下线，不具备远程服务器原有的 7×24 能力。
-  - **已实证（2026-10-24）**：WSL 重启后服务确实消失，`curl localhost:8001` 返回 000。连带暴露「抢跑 503」——容器由 Docker 在 WSL 启动后拉起需数秒，此时启动 PHP 会让全站 503。
-  - 行动：①（已缓解）`_prod_ctl.sh start` 内置等待数据库就绪；②（待做）配 Windows 任务计划程序或 WSL systemd 实现开机自动拉起；③（待做）把 `_backup_prod.sh` 挂到定时任务。
+- **T7：正式环境开机自启** —— **已解决（2026-10-24，工单 T7 已完成）**
+  - 原状：`php -S` 由手工 `_prod_ctl.sh start` 拉起，WSL 重启后服务消失（实测 `curl localhost:8001` 返回 000），且抢在数据库容器就绪前启动会导致全站 503。
+  - 解法：WSL 内 systemd unit `typecho-prod.service` 随 WSL 启动自动拉起（`Restart=always` 自愈）；`ExecStartPre` 调 `typecho-prod-wait-db` 先等 Docker 与 MySQL 就绪再起服务；备份由 `typecho-backup.timer` 每日 03:30 执行（`Persistent=true` 补跑错过时段）。
+  - **明确不做**：Windows 开机自启。Windows 冷启动后 WSL 本身不自启，博客会保持下线直到用户打开 WSL——这是有意取舍，不是缺口。决策见 ADR-003「2026-10-24」段。
 
 - **T8：正式环境数据库口令已泄漏，需轮换**
   - 现状：2026-10-06 排查时，脱敏正则未匹配 Typecho 的实际写法（`'password' => '...'`），正式库口令与账号被明文打印进 AI 会话记录。新环境 `config.inc.php` 沿用同一组凭据。

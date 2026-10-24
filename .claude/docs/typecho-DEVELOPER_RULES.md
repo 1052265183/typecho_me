@@ -299,10 +299,14 @@ git push bare master
 bash .claude/scripts/_git_pull_prod.sh
 bash .claude/scripts/_git_pull_prod.sh --apply
 
-# 服务控制
-bash .claude/scripts/_prod_ctl.sh {start|stop|restart|status|log}
+# 服务控制（由 WSL 内 systemd 管理，随 WSL 启动自动就绪）
+systemctl status typecho-prod          # 服务状态
+systemctl restart typecho-prod         # 重启服务
+systemctl stop typecho-prod            # 临时停止
+journalctl -u typecho-prod -n 50       # 查看日志
+systemctl list-timers typecho-backup   # 备份定时器
 
-# 备份（数据库 + uploads 增量快照）
+# 备份（数据库 + uploads 增量快照）——定时器每日 03:30 自动跑，这里用于手工补备份
 bash .claude/scripts/_backup_prod.sh
 bash .claude/scripts/_backup_prod.sh --list
 
@@ -312,12 +316,16 @@ bash .claude/scripts/_prod_probe.sh
 
 发布无需重启服务：`php -S` 每次请求都重新解析文件。
 
+> **自启实现**：unit 源文件在 `.claude/scripts/systemd/`（`typecho-prod.service`、`typecho-backup.{service,timer}`、`typecho-prod-wait-db`），用 `.claude/scripts/_install_prod_systemd.sh` 安装（`--status` 查看、`--remove` 卸载）。**不做 Windows 开机自启**：WSL 起来服务就自动就绪，但 Windows 冷启动后 WSL 本身不自启，博客会保持下线直到你打开 WSL（ADR-003）。
+>
+> `_prod_ctl.sh` 仍保留，但**仅在未安装 systemd 时**作为手工启停手段；装了 systemd 后不要用它，会抢 8001 端口。
+>
 > 早期版本用 `_deploy_prod.sh`（rsync 同步）发布，已被 git 方式取代。脚本保留未删除，若需一次性全量覆盖仍可用；日常发布一律走 git。
 
 ### 必须知道的三件事
 
 1. **穿透客户端要把映射从 22380 改到 8001**。`siteUrl`（`xkj88.e3.luyouxia.net:29026`）存在数据库 options 表里，不在配置文件里；过渡期用 `localhost:8001` 打开时，静态资源仍按 `siteUrl` 指向穿透域名，会加载到旧环境资源。
-2. **本机不再是 7×24**：Windows 关机 / 休眠 / WSL 被终止都会让博客下线。旧宝塔环境（容器 `typecho_agbf-typecho_AGbF-1`、目录 `/www/dk_project/dk_app/typecho/typecho_AGbF/`）**暂未删除**，是现成的回滚点。
+2. **可用性边界**：WSL 一启动服务即自动就绪；但 **Windows 冷启动后 WSL 不自动拉起**（有意不做），博客会保持下线直到打开 WSL。旧宝塔环境（容器 `typecho_agbf-typecho_AGbF-1`、目录 `/www/dk_project/dk_app/typecho/typecho_AGbF/`）**暂未删除**，是现成的回滚点。
 3. **`router.php` 必须在**：删了它 `php -S` 起不来或文章页全 404（`php -S` 不支持 PATH_INFO）。源文件在 `.claude/scripts/router.php`，发布脚本会单独同步过去。
 
 ## Git 规范
