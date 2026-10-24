@@ -1,10 +1,11 @@
 [Unit]
-# 每日 03:30 触发备份。Persistent=true 让 WSL 睡眠/关闭期间错过的执行在下次启动后补跑一次，
-# 否则笔记本经常关机的情况下可能长期不备份。
-Description=Typecho production daily backup timer
+# 每 6 小时检查一次是否有变化；无变化时脚本秒级退出，不产生任何包。
+# Persistent=true：WSL 关闭期间错过的检查，在下次启动后补跑一次
+# （已实测验证有效：伪造 stamp 到 3 天前，重新 start 会立即触发）。
+Description=Typecho production backup check (every 6h)
 
 [Timer]
-OnCalendar=*-*-* 03:30:00
+OnCalendar=*-*-* 00,06,12,18:30:00
 Persistent=true
 Unit=typecho-backup.service
 
