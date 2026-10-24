@@ -13,6 +13,9 @@
 *.sh text eol=lf
 *.py text eol=lf
 *.md text eol=lf
+# systemd 单元与辅助脚本没有扩展名，上面的按扩展名规则覆盖不到。
+# 以 CRLF 落盘会导致 systemd 解析失败或脚本 bad interpreter。
+.claude/scripts/systemd/* text eol=lf
 
 # Denote all files that are truly binary and should not be modified.
 *.png binary
