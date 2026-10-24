@@ -71,7 +71,7 @@
 
 - **T7：正式环境开机自启** —— **已解决（2026-10-24，工单 T7 已完成）**
   - 原状：`php -S` 由手工 `_prod_ctl.sh start` 拉起，WSL 重启后服务消失（实测 `curl localhost:8001` 返回 000），且抢在数据库容器就绪前启动会导致全站 503。
-  - 解法：WSL 内 systemd unit `typecho-prod.service` 随 WSL 启动自动拉起（`Restart=always` 自愈）；`ExecStartPre` 调 `typecho-prod-wait-db` 先等 Docker 与 MySQL 就绪再起服务；备份由 `typecho-backup.timer` 每日 03:30 执行（`Persistent=true` 补跑错过时段）。
+  - 解法：WSL 内 systemd unit `typecho-prod.service` 随 WSL 启动自动拉起（`Restart=always` 自愈）；`ExecStartPre` 调 `typecho-prod-wait-db` 先等 Docker 与 MySQL 就绪再起服务；备份由 `typecho-backup.timer` 每 6 小时检查（`Persistent=true` 补跑错过时段），**无变化则跳过、有变化才落 F 盘**，滚动保留 3 份。
   - **明确不做**：Windows 开机自启。Windows 冷启动后 WSL 本身不自启，博客会保持下线直到用户打开 WSL——这是有意取舍，不是缺口。决策见 ADR-003「2026-10-24」段。
 
 - **T8：正式环境数据库口令已泄漏，需轮换**

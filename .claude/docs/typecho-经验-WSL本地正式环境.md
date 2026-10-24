@@ -125,6 +125,32 @@ git config --global --get-all safe.directory 2>/dev/null | grep -qx "$DOCROOT" \
 
 **解法**：`.gitignore` 加 `__pycache__/` 与 `*.pyc`，并 `git rm -r --cached` 移除跟踪（磁盘文件保留）。
 
+## 十五、改了脚本但 systemd 跑的还是旧版
+
+**现象**：备份脚本已改成落 F 盘，`systemctl start typecho-backup.service` 后日志却显示备份到了 `/root/backups/typecho`，还按旧规则删掉了历史备份。
+
+**原因**：systemd 执行的是**正式环境目录**里的脚本副本（`/root/www/typecho_prod/.claude/scripts/`），不是开发目录 `E:\deepseek_work\typecho` 那份。项目要求「先 commit 再发布」，脚本改动没走 `_git_pull_prod.sh --apply` 就还是旧逻辑。
+
+**教训**：任何被 systemd / cron 引用的脚本，改完必须确认已发布到执行位置再触发，否则会静默跑旧版。验证方式是直接看执行位置那份文件的变量值，而不是看开发目录。
+
+## 十六、`/mnt/f` 是 9p，硬链接快照用不了
+
+**现象**：原备份方案用 `rsync --link-dest` 做增量硬链接快照，改到 Windows 盘后每份快照都占满全量空间。
+
+**原因**：WSL 访问 Windows 盘走 **9p 协议**（`df -T /mnt/f` 显示 `9p`），与 WSL 内部 ext4 是不同文件系统，**跨盘硬链接不可用**（`ln` 实测失败）。`--link-dest` 依赖硬链接，因此完全失效。
+
+**解法**：Windows 盘上只用**独立压缩包**，不依赖硬链接。每份包自包含、可独立还原，放弃去重换可靠性。写入性能实测 1.6G 约 6.2 秒（约 260MB/s），9p 开销可接受。
+
+**附带发现**：本站 uploads 有 718 个 png + 68 个 jpg，`zstd -1` 压缩后 **1.6G → 1.6G，压缩率为零**。这类数据不要指望压缩，选低压缩档省 CPU 即可；保留 zst 的价值在内建校验 `zstd -t`。
+
+## 十七、`Persistent=true` 不能用「过去的绝对时间」验证
+
+**现象**：把 timer 的 `OnCalendar` 改成 2 小时前的绝对时间、期望 `Persistent=true` 立即补跑，结果 20 秒内什么都没发生，误判为不生效。
+
+**原因**：systemd 对**已过去的绝对时刻**会判定「该点已记录过」，因此不补跑；它补跑的是「按 OnCalendar 规则本应触发、但因停机错过」的时间点。
+
+**正确验法**：保留 `OnCalendar=*-*-* HH:MM:00` 这类**重复规则**，把 `/var/lib/systemd/timers/stamp-<unit>.timer` 的 mtime 改成几天前（模拟长期关机），再 `systemctl start` 该 timer——实测会立即触发一次。用此法验证本站备份 timer 后确认有效。
+
 ## 附：可复用的探查命令
 
 ```bash

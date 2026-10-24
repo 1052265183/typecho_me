@@ -215,7 +215,7 @@ bash .claude/scripts/_git_pull_prod.sh --apply
 - **发布后无需重启服务**。`php -S` 每次请求都重新解析文件。
 - **服务由 WSL 内 systemd 管理，不要手工抢端口**。`typecho-prod.service` 随 WSL 启动自动拉起（`systemctl status typecho-prod`），`Restart=always` 会在崩溃后自愈。调试时若要临时停，用 `systemctl stop typecho-prod`；**不要**直接 `php -S` 或 `_prod_ctl.sh start`，否则与 systemd 抢 8001 端口。`_prod_ctl.sh` 仅在未安装 systemd 时作为手工启停手段保留——它的 `start` 会先等数据库容器就绪，避免抢跑导致全站 503。
 - **不配 Windows 开机自启**。WSL 启动则服务自动就绪；但 Windows 冷启动后 WSL 本身不会自启，博客会保持下线直到你打开 WSL。这是有意取舍，不是故障（决策见 ADR-003）。
-- **备份由 `typecho-backup.timer` 每日 03:30 自动执行**（`systemctl list-timers typecho-backup`），`Persistent=true` 保证错过的执行在下次启动后补跑。手工补备份仍可用 `_backup_prod.sh`。
+- **备份落 F 盘，变化驱动**。`typecho-backup.timer` 每 6 小时检查一次（`systemctl list-timers typecho-backup`）；脚本先算数据指纹，**无变化直接退出不产包**，有变化才打 zstd 包到 `F:\1A开发备份\博客备份`，滚动保留最新 3 份。手工补备份用 `_backup_prod.sh`（`--status` 看是否会备份、`--list` 列出、`--force` 强制）。备份必须落在 F 盘而非 WSL 磁盘——本机盘故障时才救得回来。
 - **主题改动必须浏览器实测**。`php -l` 只查 PHP 层，`</script>` 闭合缺失等 HTML 层问题只有真实整页加载能暴露——与 §3 主题 PJAX 纪律同理。
 - **不要在正式环境直接改代码**。正式环境应是 git 工作副本的干净检出（`git status` 应为 0 项）；手工改动会在下次 `reset --hard` 时被静默丢弃。
 
@@ -239,7 +239,18 @@ git push bare <上一提交号>:master
 bash .claude/scripts/_git_pull_prod.sh --apply
 ```
 
-数据回滚另算：数据库用 `bash .claude/scripts/_backup_prod.sh --list` 找备份（每日全量 dump，保留 14 天）；`uploads` 用 `--link-dest` 增量快照（保留 7 天）。
+数据回滚另算。备份在 `F:\1A开发备份\博客备份`，任意一个包都是自包含完整快照：
+
+```bash
+# 数据库（解压后直接喂给 mysql）
+zstd -dc typecho_db_<时间戳>.sql.zst | docker exec -i <容器ID> mysql -u<用户> -p<库名>
+# uploads（恢复到正式目录，先备份现有目录）
+zstd -dc typecho_uploads_<时间戳>.tar.zst | tar -xf - -C /root/www/typecho_prod/usr/uploads
+# 校验包完整性
+zstd -t typecho_*.zst
+```
+
+用 `bash .claude/scripts/_backup_prod.sh --list` 列出可用包。
 
 ### 0.6.6 旧宝塔 Docker 环境（2026-10-06 起弃用，仅回滚参考）
 
